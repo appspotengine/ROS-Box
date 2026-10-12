@@ -1,0 +1,3 @@
+https://github.com/MetaCubeX/meta-rules-dat/tree/99d991799d154e4a1ed50394081d5bacaa0d31ec/geo
+Compiled rule sets distributed unchanged from MetaCubeX.
+Corresponding JSON sources are included in sources.tar.gz; see LICENSE.

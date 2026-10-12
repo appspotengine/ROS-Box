@@ -1,0 +1,21 @@
+#!/bin/sh
+# Open-Box Panel 控制脚本 (Container 模式)
+ACTION="$1"
+case "$ACTION" in
+  status)
+    if pgrep -f "panel/server/index.mjs" >/dev/null 2>&1 || pgrep -x node >/dev/null 2>&1; then
+      echo "running"
+      exit 0
+    else
+      echo "stopped"
+      exit 1
+    fi
+    ;;
+  restart|reload)
+    pkill -HUP -f "panel/server/index.mjs" 2>/dev/null || true
+    exit 0
+    ;;
+  *)
+    exit 0
+    ;;
+esac

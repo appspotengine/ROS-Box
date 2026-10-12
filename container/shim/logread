@@ -1,0 +1,24 @@
+#!/bin/sh
+# 给面板用的 logread 替身:容器环境下没有 OpenWrt 的 logread 和 journald。
+# 包装此脚本以便面板的错误检测与诊断包能够直接获取 sing-box 内核日志。
+LOGFILE="/opt/open-box/data/sing-box.log"
+PATTERN=""
+LINES=3000
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -e) PATTERN="$2"; shift 2 ;;
+    -l) LINES="$2"; shift 2 ;;
+    *) shift ;;
+  esac
+done
+
+if [ ! -f "$LOGFILE" ]; then
+  exit 0
+fi
+
+if [ -n "$PATTERN" ] && [ "$PATTERN" != "sing-box" ]; then
+  tail -n "$LINES" "$LOGFILE" | grep -E -- "$PATTERN"
+else
+  tail -n "$LINES" "$LOGFILE"
+fi

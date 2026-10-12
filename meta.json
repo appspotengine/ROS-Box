@@ -1,0 +1,10 @@
+{
+  "version": "v0.1.317",
+  "singboxVersion": "1.14.1-openbox-tcp22",
+  "nodeVersion": "24.18.0",
+  "arch": "x64",
+  "builtAt": "2026-10-12T01:49:05Z",
+  "sourceCommit": "274b909bc34f9832c2d39f5ac6474ab0c1205921",
+  "geoVersion": "99d991799d154e4a1ed50394081d5bacaa0d31ec",
+  "geoDate": "2026-10-12T01:31:31Z"
+}

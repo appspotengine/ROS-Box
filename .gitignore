@@ -1,0 +1,58 @@
+# ==========================================
+# ROS-Box Git Ignore Rules
+# ==========================================
+
+# Compressed Archives & Big Tarballs (DO NOT COMMIT >100MB FILES)
+*.tar
+*.tar.gz
+*.tar.xz
+*.tar.zst
+*.zip
+*.7z
+*.rar
+*.iso
+*.img
+open-box-project.*
+ROS-Box*.tar*
+open-box*.tar*
+ros-box*.tar*
+
+# Temporary & Workspace Folders
+scratch/
+tmp*/
+data/
+runtime/
+logs/
+*.log
+
+# Node.js & Front-end dependencies
+node_modules/
+.npm/
+.yarn/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Backup & Artifact files
+*.backup
+*.tmp
+*.bak
+*.swp
+*.swo
+
+# System & OS Files
+.DS_Store
+Thumbs.db
+desktop.ini
+ehthumbs.db
+
+# IDE & Editor configurations
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Runtime generated databases & caches
+panel/server/data/sqlite.db*
+panel/server/runtime/

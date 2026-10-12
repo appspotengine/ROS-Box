@@ -1,0 +1,10 @@
+#!/bin/sh
+# ROS-Box UCI Shim for Container Environment
+# Container on RouterOS does not use OpenWrt UCI configuration.
+# This shim returns 0 safely for any UCI invocations.
+case "$1" in
+  -q)
+    shift
+    ;;
+esac
+exit 0
