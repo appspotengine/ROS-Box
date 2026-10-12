@@ -1,7 +1,7 @@
 # ROS-Box (RouterOS Appliance)
 
 <p align="center">
-  <img src="panel/dist/logo-orbit.svg" alt="ROS-Box Logo" width="130" height="130" />
+  <img src="https://raw.githubusercontent.com/zyeyefyass/ROS-Box/main/panel/dist/logo-cube-v3.svg" alt="ROS-Box Logo" width="130" height="130" />
 </p>
 
 <p align="center">
@@ -11,6 +11,7 @@
 
 <p align="center">
   <a href="https://github.com/zyeyefyass/ROS-Box/releases/latest"><img src="https://img.shields.io/github/v/release/zyeyefyass/ROS-Box?color=00d2ff&label=Release&logo=github" alt="Latest Release"></a>
+  <a href="https://hub.docker.com/r/fyasshole/ros-box"><img src="https://img.shields.io/badge/Docker_Hub-fyasshole%2Fros--box-2496ED?logo=docker&logoColor=white" alt="Docker Hub"></a>
   <img src="https://img.shields.io/badge/RouterOS-v7.4~v7.24+-004e82.svg?logo=mikrotik&logoColor=white" alt="RouterOS" />
   <img src="https://img.shields.io/badge/Sing--Box-v1.14-00d2ff.svg" alt="Sing-Box" />
   <img src="https://img.shields.io/badge/Architecture-amd64%20%7C%20arm64-38bdf8.svg" alt="Arch" />
@@ -23,14 +24,14 @@
 ## 📸 界面效果预览
 
 <p align="center">
-  <img src="docs/images/overview.png" alt="ROS-Box 概览页" width="85%" style="border-radius: 8px; box-shadow: 0 4px 20px rgba(0,45,80,0.3);" />
+  <img src="https://raw.githubusercontent.com/zyeyefyass/ROS-Box/main/docs/images/overview.png" alt="ROS-Box 概览页" width="85%" style="border-radius: 8px; box-shadow: 0 4px 20px rgba(0,45,80,0.3);" />
 </p>
 <p align="center">
   <em>图 1：ROS-Box 控制台概览页（MikroTik 科技深蓝美学、3D 动力莫比乌斯双环、核心指标实时监控）</em>
 </p>
 
 <p align="center">
-  <img src="docs/images/settings.png" alt="ROS-Box 设置页" width="85%" style="border-radius: 8px; box-shadow: 0 4px 20px rgba(0,45,80,0.3);" />
+  <img src="https://raw.githubusercontent.com/zyeyefyass/ROS-Box/main/docs/images/settings.png" alt="ROS-Box 设置页" width="85%" style="border-radius: 8px; box-shadow: 0 4px 20px rgba(0,45,80,0.3);" />
 </p>
 <p align="center">
   <em>图 2：ROS-Box 设置中心（纯净毛玻璃通透层次、无商业引流与广告）</em>
@@ -138,9 +139,9 @@ ROS-Box 在保留上游优秀路由规则体系的同时，彻底剥离了对 Op
    /interface/veth add name=veth-rosbox address=192.168.88.2/24 gateway=192.168.88.1
    /interface/bridge/port add bridge=bridge interface=veth-rosbox comment="ROS-Box Container VETH"
 
-   # 2. 建立持久化数据挂载卷
-   /container/mounts add name=rosbox-data src="disk1/rosbox/data" dst="/opt/open-box/data"
-   /container/mounts add name=rosbox-etc src="disk1/rosbox/etc" dst="/opt/open-box/etc"
+    # 2. 建立持久化数据挂载卷
+   /container/mounts add name=rosbox-data src="disk1/rosbox/data" dst="/opt/ROS-Box/data"
+   /container/mounts add name=rosbox-etc src="disk1/rosbox/etc" dst="/opt/ROS-Box/etc"
 
    # 3. 导入本地镜像创建容器
    /container add file=disk1/ROS-Box-amd64.tar interface=veth-rosbox root-dir=disk1/rosbox/root mounts=rosbox-data,rosbox-etc logging=yes start-on-boot=yes comment="ROS-Box"
@@ -187,37 +188,30 @@ ROS-Box 在保留上游优秀路由规则体系的同时，彻底剥离了对 Op
 /tool fetch url="https://raw.githubusercontent.com/zyeyefyass/ROS-Box/main/scripts/ros-install-tar-gateway.rsc" dst-path="disk1/ros-install.rsc"; /import file=disk1/ros-install.rsc
 ```
 
-### 二、标准 Docker 环境部署
+---
 
-如果您希望将 ROS-Box 运行在 Linux 主机、软路由、PVE 或 NAS Docker 中，支持以下两种部署方式：
+### 二、标准 Docker / NAS 环境部署（飞牛 fnOS / 群晖 / Unraid / Linux）
 
-#### 方式 1：Docker CLI 一键命令部署
-```bash
-docker run -d \
-  --name ros-box \
-  --restart unless-stopped \
-  --cap-add=NET_ADMIN \
-  --device /dev/net/tun:/dev/net/tun \
-  -p 2026:2026 \
-  -p 7853:7853/udp \
-  -p 7853:7853/tcp \
-  -p 7890:7890 \
-  --sysctl net.ipv4.ip_forward=1 \
-  -v /opt/rosbox/data:/opt/open-box/data \
-  -v /opt/rosbox/etc:/opt/open-box/etc \
-  ghcr.io/zyeyefyass/ros-box:latest
-```
+本项目已同步发布至 **Docker Hub (`fyasshole/ros-box`)** 与 **GitHub Container Registry (`ghcr.io/zyeyefyass/ros-box`)**，原生支持 `linux/amd64` 与 `linux/arm64` 双架构：
 
-#### 方式 2：Docker Compose 一键部署
-在项目根目录或新建 `docker-compose.yml`：
+#### 方式 1：飞牛 fnOS / 群晖 / Unraid 镜像仓库直接搜索部署（图形化推荐）
+1. 打开 NAS 的 **Docker → 镜像仓库**；
+2. 在顶部搜索框直接输入 **`ros-box`**（或 **`fyasshole/ros-box`**），即可搜出官方镜像并点击下载（标签选择 `latest`）；
+3. 创建容器时开启 **最高权限（Privileged / `NET_ADMIN`）**，网络模式建议使用 **Host 网络** 或独立 **Macvlan**，并将 `/opt/ROS-Box/data` 与 `/opt/ROS-Box/etc` 映射至本地文件夹即可启动。
+
+#### 方式 2：Docker Compose 一键部署（支持飞牛 fnOS「Compose → 新增项目」）
+在飞牛 fnOS 的 **Docker → Compose → 新增项目** 中（或新建 `docker-compose.yml`）粘贴以下配置：
 ```yaml
 services:
   ros-box:
-    image: ghcr.io/zyeyefyass/ros-box:latest
+    # Docker Hub 官方镜像（也可替换为 ghcr.io/zyeyefyass/ros-box:latest）
+    image: fyasshole/ros-box:latest
     container_name: ros-box
     restart: unless-stopped
+    privileged: true
     cap_add:
       - NET_ADMIN
+      - SYS_ADMIN
     devices:
       - /dev/net/tun:/dev/net/tun
     ports:
@@ -228,15 +222,35 @@ services:
     sysctls:
       - net.ipv4.ip_forward=1
     volumes:
-      - ./data:/opt/open-box/data
-      - ./etc:/opt/open-box/etc
+      - ./data:/opt/ROS-Box/data
+      - ./etc:/opt/ROS-Box/etc
     environment:
+      - TZ=Asia/Shanghai
       - PORT=2026
       - OPENBOX_PLATFORM=container
 ```
 执行启动命令：
 ```bash
 docker compose up -d
+```
+
+#### 方式 3：Docker CLI 一键命令部署
+```bash
+docker run -d \
+  --name ros-box \
+  --restart unless-stopped \
+  --privileged \
+  --cap-add=NET_ADMIN \
+  --device /dev/net/tun:/dev/net/tun \
+  -p 2026:2026 \
+  -p 7853:7853/udp \
+  -p 7853:7853/tcp \
+  -p 7890:7890 \
+  --sysctl net.ipv4.ip_forward=1 \
+  -v /opt/rosbox/data:/opt/ROS-Box/data \
+  -v /opt/rosbox/etc:/opt/ROS-Box/etc \
+  -e TZ=Asia/Shanghai \
+  fyasshole/ros-box:latest
 ```
 
 ---
@@ -254,7 +268,7 @@ docker compose up -d
 
 仓库内置 [`.github/workflows/upstream-sync.yml`](.github/workflows/upstream-sync.yml) CI/CD 自动化流水线：
 - **定时巡检**：每天 **11:00**（北京时间）与 **23:00**（北京时间）自动检测上游 [liandu2024/Open-Box](https://github.com/liandu2024/Open-Box) 的最新 Release；
-- **全自动发布**：当检测到上游新版本发布时，自动触发多架构（`linux/amd64` 与 `linux/arm64`）镜像编译构建，生成与上游版本号一致的 GitHub Releases 纯净 `.tar` 离线包并同步推送至 GHCR，实现永久无人值守自动同步。
+- **全自动双端发布**：当检测到上游新版本发布时，自动触发多架构（`linux/amd64` 与 `linux/arm64`）镜像编译构建，生成与上游版本号一致的 **GitHub Releases 纯净 `.tar` 离线包**，并同步推送至 **Docker Hub (`fyasshole/ros-box`)** 与 **GHCR (`ghcr.io/zyeyefyass/ros-box`)**，实现永久无人值守自动同步。
 
 ---
 
