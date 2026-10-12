@@ -1,0 +1,62 @@
+name: Build ROS-Box Container Tarballs
+
+on:
+  push:
+    branches: [ main, master ]
+    tags: [ 'v*' ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and Export linux/amd64 Tarball
+        run: |
+          docker buildx build \
+            --platform linux/amd64 \
+            -t ros-box:amd64 \
+            --output type=docker,dest=ROS-Box-amd64.tar \
+            .
+
+      - name: Build and Export linux/arm64 Tarball
+        run: |
+          docker buildx build \
+            --platform linux/arm64 \
+            -t ros-box:arm64 \
+            --output type=docker,dest=ROS-Box-arm64.tar \
+            .
+
+      - name: Generate SHA256 Checksums
+        run: |
+          sha256sum ROS-Box-amd64.tar > ROS-Box-amd64.tar.sha256
+          sha256sum ROS-Box-arm64.tar > ROS-Box-arm64.tar.sha256
+
+      - name: Upload Tarballs as Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ros-box-tarballs
+          path: |
+            ROS-Box-*.tar
+            ROS-Box-*.tar.sha256
+
+      - name: Create Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            ROS-Box-*.tar
+            ROS-Box-*.tar.sha256
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

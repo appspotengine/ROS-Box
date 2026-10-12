@@ -1,0 +1,182 @@
+name: Auto Sync Upstream Releases & Build ROS-Box Tarballs
+
+on:
+  schedule:
+    # 每天北京时间 11:00 (UTC 03:00) 与 23:00 (UTC 15:00) 定时检查
+    - cron: '0 3,15 * * *'
+  workflow_dispatch:
+    inputs:
+      force_build:
+        description: 'Force build and release regardless of upstream tag state'
+        type: boolean
+        default: true
+      custom_tag:
+        description: 'Custom version tag (e.g. v0.1.317), leave empty to detect upstream'
+        type: string
+        default: ''
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  check-version:
+    runs-on: ubuntu-latest
+    outputs:
+      should_build: ${{ steps.decide.outputs.should_build }}
+      target_tag: ${{ steps.decide.outputs.target_tag }}
+      release_notes: ${{ steps.decide.outputs.release_notes }}
+    steps:
+      - name: Check upstream Open-Box release
+        id: upstream
+        run: |
+          UPSTREAM_JSON=$(curl -sSL "https://api.github.com/repos/liandu2024/Open-Box/releases/latest")
+          UPSTREAM_TAG=$(echo "$UPSTREAM_JSON" | grep -oP '"tag_name":\s*"\K[^"]+' || echo "v0.1.317")
+          UPSTREAM_BODY=$(echo "$UPSTREAM_JSON" | grep -oP '"body":\s*"\K[^"]+' || echo "")
+          echo "upstream_tag=$UPSTREAM_TAG" >> $GITHUB_OUTPUT
+          echo "upstream_body=$UPSTREAM_BODY" >> $GITHUB_OUTPUT
+          echo "Detected Upstream Tag: $UPSTREAM_TAG"
+
+      - name: Check local releases
+        id: local
+        run: |
+          LOCAL_JSON=$(curl -sSL "https://api.github.com/repos/${{ github.repository }}/releases/tags/${{ steps.upstream.outputs.upstream_tag }}" || echo "{}")
+          EXISTS=$(echo "$LOCAL_JSON" | grep -oP '"tag_name":\s*"\K[^"]+' || echo "")
+          if [ -n "$EXISTS" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "Release ${{ steps.upstream.outputs.upstream_tag }} already exists."
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "Release ${{ steps.upstream.outputs.upstream_tag }} does not exist yet."
+          fi
+
+      - name: Decide build trigger
+        id: decide
+        run: |
+          CUSTOM_TAG="${{ inputs.custom_tag }}"
+          FORCE_BUILD="${{ inputs.force_build }}"
+          UPSTREAM_TAG="${{ steps.upstream.outputs.upstream_tag }}"
+          EXISTS="${{ steps.local.outputs.exists }}"
+
+          if [ "${{ github.event_name }}" = "push" ]; then
+            TAG_NAME="${{ github.ref_name }}"
+            echo "should_build=true" >> $GITHUB_OUTPUT
+            echo "target_tag=$TAG_NAME" >> $GITHUB_OUTPUT
+          elif [ -n "$CUSTOM_TAG" ]; then
+            echo "should_build=true" >> $GITHUB_OUTPUT
+            echo "target_tag=$CUSTOM_TAG" >> $GITHUB_OUTPUT
+          elif [ "$FORCE_BUILD" = "true" ]; then
+            echo "should_build=true" >> $GITHUB_OUTPUT
+            echo "target_tag=$UPSTREAM_TAG" >> $GITHUB_OUTPUT
+          elif [ "$EXISTS" = "false" ]; then
+            echo "should_build=true" >> $GITHUB_OUTPUT
+            echo "target_tag=$UPSTREAM_TAG" >> $GITHUB_OUTPUT
+          else
+            echo "should_build=false" >> $GITHUB_OUTPUT
+            echo "target_tag=$UPSTREAM_TAG" >> $GITHUB_OUTPUT
+            echo "Repository is up-to-date with upstream $UPSTREAM_TAG. Skipping build."
+          fi
+
+  build-and-release:
+    needs: check-version
+    if: needs.check-version.outputs.should_build == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and Push Multi-Arch Docker Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}:latest
+            ghcr.io/${{ github.repository }}:${{ needs.check-version.outputs.target_tag }}
+
+      - name: Build and Export linux/amd64 Tarball
+        run: |
+          docker buildx build \
+            --platform linux/amd64 \
+            -t ros-box:amd64 \
+            --output type=docker,dest=ROS-Box-amd64.tar \
+            .
+          gzip -c -9 ROS-Box-amd64.tar > ROS-Box-amd64.tar.gz
+
+      - name: Build and Export linux/arm64 Tarball
+        run: |
+          docker buildx build \
+            --platform linux/arm64 \
+            -t ros-box:arm64 \
+            --output type=docker,dest=ROS-Box-arm64.tar \
+            .
+          gzip -c -9 ROS-Box-arm64.tar > ROS-Box-arm64.tar.gz
+
+      - name: Generate Checksums
+        run: |
+          sha256sum ROS-Box-amd64.tar > ROS-Box-amd64.tar.sha256
+          sha256sum ROS-Box-arm64.tar > ROS-Box-arm64.tar.sha256
+          sha256sum ROS-Box-amd64.tar.gz > ROS-Box-amd64.tar.gz.sha256
+          sha256sum ROS-Box-arm64.tar.gz > ROS-Box-arm64.tar.gz.sha256
+
+      - name: Create or Update GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.check-version.outputs.target_tag }}
+          name: ROS-Box ${{ needs.check-version.outputs.target_tag }} (RouterOS Appliance)
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          body: |
+            ## 🌟 ROS-Box ${{ needs.check-version.outputs.target_tag }} 发布说明
+
+            专为 **MikroTik RouterOS 7.x Container** 深度优化的透明代理旁路由容器系统。
+
+            ### 🚀 核心架构与特性
+            - **版本基线**：与上游 Open-Box `${{ needs.check-version.outputs.target_tag }}` 核心规则同步，Sing-Box 1.14 最新内核；
+            - **60MiB 极省内存**：`GOMEMLIMIT=60MiB`，空闲运行内存 45~55MB，完美适配 RB5009、hAP ax2/ax3 设备；
+            - **RouterOS 7.22+ 策略路由缺陷自愈**：内核启动期与运行期自动消除 `ip rule` 规则冲突，终结 TUN 模式流量拦截；
+            - **Smart DNS 零泄露并发竞速**：国内三路 DNS 并发秒级解析（1~3ms），海外通过加密代理透明转发；
+            - **TCP Fast Open (TFO) 加速**：首包握手提速，显著改善高并发连接体验；
+            - **纯净深蓝美学**：MikroTik 专属视觉设计与 3D 动力晶体双环 Logo。
+
+            ### 📦 资产包说明
+            - **`ROS-Box-amd64.tar` / `.tar.gz`**：适用于 PC 软路由、工控机、PVE/ESXi 虚拟机、RouterOS CHR 等 x86_64 架构；
+            - **`ROS-Box-arm64.tar` / `.tar.gz`**：适用于 MikroTik 官方硬件（RB5009、CCR2004、CCR2116、hAP ax2/ax3 等）aarch64 架构；
+            - **Docker 容器镜像**：`ghcr.io/${{ github.repository }}:latest`
+
+            ### 💻 WinBox 导入指引
+            1. 下载对应架构的 `.tar` 离线包；
+            2. 拖拽上传到 RouterOS 外置存储（如 `disk1/`）；
+            3. 在 WinBox Terminal 执行：
+               ```routeros
+               /container add file=disk1/ROS-Box-amd64.tar interface=veth-rosbox root-dir=disk1/rosbox/root mounts=rosbox-data,rosbox-etc logging=yes start-on-boot=yes
+               ```
+          files: |
+            ROS-Box-amd64.tar
+            ROS-Box-amd64.tar.gz
+            ROS-Box-amd64.tar.sha256
+            ROS-Box-amd64.tar.gz.sha256
+            ROS-Box-arm64.tar
+            ROS-Box-arm64.tar.gz
+            ROS-Box-arm64.tar.sha256
+            ROS-Box-arm64.tar.gz.sha256
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
