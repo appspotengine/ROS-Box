@@ -91,17 +91,31 @@ ROS-Box 在保留上游优秀路由规则体系的同时，彻底剥离了对 Op
 
 ### 一、RouterOS 7.x 部署（推荐）
 
-#### 准备工作：开启容器功能与挂载磁盘
-在 WinBox 打开 **Terminal**，执行：
-```routeros
-/system/device-mode/update container=yes
-```
-按提示按下设备物理 Reset 键或在 3-5 分钟内执行 `/system/reboot`。外置磁盘请进入 **System → Disks** 格式化为 **ext4**（假设盘符为 `disk1`）。
+#### 准备工作：开启容器功能、磁盘挂载与虚拟网卡配置
+
+1. **开启容器功能**：
+   在 WinBox 打开 **Terminal**，执行：
+   ```routeros
+   /system/device-mode/update container=yes
+   ```
+   按提示按下设备物理 Reset 键或在 3-5 分钟内执行 `/system/reboot`。
+2. **挂载外置存储**：
+   外置 USB/SSD 请进入 **System → Disks** 格式化为 **ext4**（假设盘符为 `disk1`）。
+3. **创建虚拟网卡 (VETH) 并加入局域网网桥 (Bridge)**：
+   *这一步是容器与局域网设备互通的关键，请在 Terminal 中执行以下两行命令：*
+   ```routeros
+   # 1. 创建 VETH 虚拟网卡 (指定容器 IP，例如 192.168.88.2，网关指向路由器 192.168.88.1)
+   /interface/veth add name=veth-rosbox address=192.168.88.2/24 gateway=192.168.88.1
+
+   # 2. 将虚拟网卡加入局域网 Bridge 网桥
+   /interface/bridge/port add bridge=bridge interface=veth-rosbox comment="ROS-Box Container VETH"
+   ```
+   *(亦可在 WinBox 中操作：**Interfaces → VETH** 点 `+` 新建；然后在 **Bridge → Ports** 点 `+` 将 `veth-rosbox` 加入 `bridge`)*
 
 ---
 
 #### 方式 1：RouterOS 终端一键命令部署（最快、最省心）
-复制以下单行命令，直接粘贴至 WinBox Terminal 回车即可自动完成网卡、网桥、挂载点和容器的创建：
+复制以下单行命令，直接粘贴至 WinBox Terminal 回车即可自动完成挂载点与容器的极速拉取与创建：
 
 ```routeros
 /tool fetch url="https://raw.githubusercontent.com/zyeyefyass/ROS-Box/main/scripts/ros-install-tar-gateway.rsc" dst-path="disk1/ros-install.rsc"; /import file=disk1/ros-install.rsc
@@ -116,16 +130,19 @@ ROS-Box 在保留上游优秀路由规则体系的同时，彻底剥离了对 Op
    - x86 / CHR 软路由：下载 **`ROS-Box-amd64.tar`**
    - RB5009 / CCR / ax2 / ax3 等 ARM 路由：下载 **`ROS-Box-arm64.tar`**
 2. 打开 WinBox **Files**，直接把下载的 `.tar` 文件拖入 `disk1/` 目录；
-3. 进入 **Container → Mounts**，创建两处持久化挂载：
+3. **确认虚拟网卡已加入 Bridge**（若准备工作第 3 步已执行可跳过）：
+   - WinBox **Interfaces → VETH**：确保 `veth-rosbox` 存在；
+   - WinBox **Bridge → Ports**：确保 `veth-rosbox` 已作为 Port 加入主 LAN `bridge`；
+4. 进入 **Container → Mounts**，创建两处持久化挂载：
    - 挂载点 1：Name=`rosbox-data`, Src=`disk1/rosbox/data`, Dst=`/opt/open-box/data`
    - 挂载点 2：Name=`rosbox-etc`, Src=`disk1/rosbox/etc`, Dst=`/opt/open-box/etc`
-4. 进入 **Container → Containers**，点击 **`+`** 号：
-   - **File**：选择 `disk1/ROS-Box-amd64.tar`（或 arm64）
-   - **Interface**：选择提前创建好的 `veth-rosbox`
+5. 进入 **Container → Containers**，点击 **`+`** 号：
+   - **File**：选择 `disk1/ROS-Box-amd64.tar`（或 arm64 包）
+   - **Interface**：选择下拉菜单中的 **`veth-rosbox`**
    - **Root Dir**：`disk1/rosbox/root`
    - **Mounts**：勾选 `rosbox-data` 和 `rosbox-etc`
    - **Logging** 与 **Start on Boot**：勾选 `yes`
-5. 等待状态由 `extracting...` 变为 `stopped`（解压完成），点击 **Start** 启动即可！
+6. 点击 **Apply/OK**，等待状态由 `extracting...` 变为 `stopped`（解压完成），点击 **Start** 启动即可！
 
 ---
 
