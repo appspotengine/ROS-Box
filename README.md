@@ -190,17 +190,87 @@ ROS-Box 在保留上游优秀路由规则体系的同时，彻底剥离了对 Op
 
 ---
 
-### 二、标准 Docker / NAS 环境部署（飞牛 fnOS / 群晖 / Unraid / Linux）
+### 二、飞牛 fnOS / 群晖 / Unraid / 标准 Docker 环境部署
 
-本项目已同步发布至 **Docker Hub (`fyasshole/ros-box`)** 与 **GitHub Container Registry (`ghcr.io/zyeyefyass/ros-box`)**，原生支持 `linux/amd64` 与 `linux/arm64` 双架构：
+本项目已同步发布至 **Docker Hub ([`fyasshole/ros-box`](https://hub.docker.com/r/fyasshole/ros-box))** 与 **GitHub Container Registry (`ghcr.io/zyeyefyass/ros-box`)**，原生支持 `linux/amd64` 与 `linux/arm64` 双架构。
 
-#### 方式 1：飞牛 fnOS / 群晖 / Unraid 镜像仓库直接搜索部署（图形化推荐）
-1. 打开 NAS 的 **Docker → 镜像仓库**；
-2. 在顶部搜索框直接输入 **`ros-box`**（或 **`fyasshole/ros-box`**），即可搜出官方镜像并点击下载（标签选择 `latest`）；
-3. 创建容器时开启 **最高权限（Privileged / `NET_ADMIN`）**，网络模式建议使用 **Host 网络** 或独立 **Macvlan**，并将 `/opt/ROS-Box/data` 与 `/opt/ROS-Box/etc` 映射至本地文件夹即可启动。
+> 💡 **为什么旁路由推荐使用独立 Macvlan 网络？**
+> 使用 **Macvlan** 可为 `ROS-Box` 容器分配一个**局域网内完全独立的 IP 与 MAC 地址**（例如飞牛 NAS 是 `192.168.88.10`，ROS-Box 独立 IP 是 `192.168.88.2`），不会占用飞牛宿主机的 53 (DNS) 端口，也不影响飞牛自身的网络与路由表，体验与独立硬件旁路由完全一致！
 
-#### 方式 2：Docker Compose 一键部署（支持飞牛 fnOS「Compose → 新增项目」）
-在飞牛 fnOS 的 **Docker → Compose → 新增项目** 中（或新建 `docker-compose.yml`）粘贴以下配置：
+---
+
+#### 方式 1：飞牛 fnOS 独立 IP（Macvlan）完整保姆级部署教程（强烈推荐 ⭐⭐⭐⭐⭐）
+
+##### 第一步：在飞牛「镜像仓库」搜索下载镜像
+1. 打开飞牛 fnOS 桌面 **Docker → 镜像仓库**；
+2. 在顶部搜索框直接输入 **`ros-box`**（或 **`fyasshole/ros-box`**），点击下载官方镜像（标签选择 `latest`）。
+
+##### 第二步：创建飞牛 Macvlan 独立局域网（仅首次需执行一次）
+通过 SSH 连接飞牛 fnOS，执行以下 3 条命令创建 Macvlan 网络（请将 `192.168.88.0/24` 和网关 `192.168.88.1` 替换为您实际的局域网网段）：
+```bash
+# 1. 查看飞牛主网卡名称（例如 enp3s0、eth0；若开启了虚拟机网桥通常为 enp3s0-ovs）
+ip route | grep default
+
+# 2. 开启物理网卡混杂模式（将 enp3s0 替换为上一步查到的实际网卡名）
+sudo ip link set enp3s0 promisc on
+
+# 3. 创建名为 macvlan-net 的 Docker 独立网络
+sudo docker network create -d macvlan \
+  --subnet=192.168.88.0/24 \
+  --gateway=192.168.88.1 \
+  -o parent=enp3s0 \
+  macvlan-net
+```
+
+##### 第三步：启动容器并绑定固定旁路由 IP（提供 Compose 与纯图形界面两种选法）
+
+- **选法 A：通过飞牛「Compose → 新增项目」固定独立 IP 启动（最推荐，重启 IP 永不变化）**
+  打开 **飞牛 Docker → Compose → 新增项目**，项目名称填 `ros-box`，选择存放路径后勾选 **「创建 docker-compose.yml」**，粘贴以下内容（将 `192.168.88.2` 改为您想分配给 ROS-Box 的空闲局域网 IP）：
+  ```yaml
+  services:
+    ros-box:
+      image: fyasshole/ros-box:latest
+      container_name: ros-box
+      restart: always
+      privileged: true
+      cap_add:
+        - NET_ADMIN
+        - SYS_ADMIN
+      devices:
+        - /dev/net/tun:/dev/net/tun
+      networks:
+        macvlan-net:
+          ipv4_address: 192.168.88.2  # 为 ROS-Box 分配的局域网独立旁路由 IP
+      dns:
+        - 223.5.5.5
+        - 119.29.29.29
+      volumes:
+        - ./data:/opt/ROS-Box/data
+        - ./etc:/opt/ROS-Box/etc
+      environment:
+        - TZ=Asia/Shanghai
+        - PORT=2026
+        - OPENBOX_PLATFORM=container
+
+  networks:
+    macvlan-net:
+      external: true
+  ```
+  点击创建并启动后，直接在浏览器访问 **`http://192.168.88.2:2026`** 即可进入 ROS-Box 控制台！局域网需要科学上网的设备只需将 **网关** 和 **DNS** 指向 `192.168.88.2` 即可。
+
+- **选法 B：通过飞牛「本地镜像 → 运行」纯图形化向导创建**
+  1. 进入 **飞牛 Docker → 本地镜像**，找到下载好的 `fyasshole/ros-box:latest` 点击右侧 **「运行」**；
+  2. **基础设置**：勾选 **「开机自启」**；展开高级设置，勾选 **「使用最高权限执行容器 (Privileged)」**；
+  3. **存储位置（文件夹映射）**：
+     - 点击「添加路径」：选择飞牛本地新建的 `data` 文件夹 → 装载路径填 **`/opt/ROS-Box/data`**（权限：读写）
+     - 点击「添加路径」：选择飞牛本地新建的 `etc` 文件夹 → 装载路径填 **`/opt/ROS-Box/etc`**（权限：读写）
+  4. **网络**：下拉选择刚刚创建的 **`macvlan-net`**（若不想配 Macvlan，也可在此直接选 **`host`** 模式，此时访问地址为 `http://<飞牛IP>:2026`）；
+  5. 点击完成创建即可一键启动！
+
+---
+
+#### 方式 2：标准 Docker Compose 部署（Bridge / Host 模式通用）
+如果您不需要 Macvlan 独立 IP，可直接使用标准端口映射模式新建 `docker-compose.yml`：
 ```yaml
 services:
   ros-box:
@@ -229,29 +299,42 @@ services:
       - PORT=2026
       - OPENBOX_PLATFORM=container
 ```
-执行启动命令：
-```bash
-docker compose up -d
-```
 
-#### 方式 3：Docker CLI 一键命令部署
-```bash
-docker run -d \
-  --name ros-box \
-  --restart unless-stopped \
-  --privileged \
-  --cap-add=NET_ADMIN \
-  --device /dev/net/tun:/dev/net/tun \
-  -p 2026:2026 \
-  -p 7853:7853/udp \
-  -p 7853:7853/tcp \
-  -p 7890:7890 \
-  --sysctl net.ipv4.ip_forward=1 \
-  -v /opt/rosbox/data:/opt/ROS-Box/data \
-  -v /opt/rosbox/etc:/opt/ROS-Box/etc \
-  -e TZ=Asia/Shanghai \
-  fyasshole/ros-box:latest
-```
+#### 方式 3：Docker CLI 一键命令部署（Macvlan 独立 IP 或端口映射）
+- **Macvlan 独立旁路由 IP 一键启动命令**：
+  ```bash
+  docker run -d \
+    --name ros-box \
+    --restart always \
+    --network macvlan-net \
+    --ip 192.168.88.2 \
+    --privileged \
+    --cap-add=NET_ADMIN \
+    --device /dev/net/tun:/dev/net/tun \
+    --dns 223.5.5.5 \
+    -v /opt/rosbox/data:/opt/ROS-Box/data \
+    -v /opt/rosbox/etc:/opt/ROS-Box/etc \
+    -e TZ=Asia/Shanghai \
+    fyasshole/ros-box:latest
+  ```
+- **标准端口映射一键启动命令**：
+  ```bash
+  docker run -d \
+    --name ros-box \
+    --restart unless-stopped \
+    --privileged \
+    --cap-add=NET_ADMIN \
+    --device /dev/net/tun:/dev/net/tun \
+    -p 2026:2026 \
+    -p 7853:7853/udp \
+    -p 7853:7853/tcp \
+    -p 7890:7890 \
+    --sysctl net.ipv4.ip_forward=1 \
+    -v /opt/rosbox/data:/opt/ROS-Box/data \
+    -v /opt/rosbox/etc:/opt/ROS-Box/etc \
+    -e TZ=Asia/Shanghai \
+    fyasshole/ros-box:latest
+  ```
 
 ---
 
