@@ -38,25 +38,9 @@ jobs:
             --output type=docker,compression=uncompressed,dest=ROS-Box-arm64.tar \
             .
 
-      - name: Generate SHA256 Checksums
-        run: |
-          sha256sum ROS-Box-amd64.tar > ROS-Box-amd64.tar.sha256
-          sha256sum ROS-Box-arm64.tar > ROS-Box-arm64.tar.sha256
-
       - name: Upload Tarballs as Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: ros-box-tarballs
           path: |
             ROS-Box-*.tar
-            ROS-Box-*.tar.sha256
-
-      - name: Create Release
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            ROS-Box-*.tar
-            ROS-Box-*.tar.sha256
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
