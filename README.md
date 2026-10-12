@@ -79,7 +79,7 @@ ROS-Box 在保留上游优秀路由规则体系的同时，彻底剥离了对 Op
 | **系统依赖** | 强依赖 `uci`、`ubus`、`procd`、宿主 `dnsmasq` | **零系统依赖**，独立容器沙盒生命周期管理 |
 | **ROS 7.22+ 兼容** | ❌ 策略路由冲突，TUN 流量被拦截失效 | **✅ 内置 `ip rule` 自动修复与自愈引擎** |
 | **空闲运行内存** | 180 ~ 350+ MiB (易导致路由器 OOM) | **✅ 仅 45 ~ 55 MiB** (`GOMEMLIMIT=60MiB`) |
-| **容器离线打包** | 镜像体积大，无开箱即用 RouterOS `.tar` | **✅ 单层高压 Squash 离线包 (220MB .tar / 87MB .tar.gz)** |
+| **容器离线打包** | 镜像体积大，无开箱即用 RouterOS `.tar` | **✅ 内置 Gzip 高压 `.tar` 离线包 (~111 MB，解压后 223 MiB)** |
 | **硬件架构** | 视 OpenWrt 编译固件而定 | **✅ 官方双架构：`linux/amd64` (x86/CHR) + `linux/arm64` (RB5009等)** |
 | **DNS 架构** | 注入宿主 dnsmasq，易受污染/泄露 | **✅ 内置 Smart DNS 多路竞速 (1~3ms) + Split-DNS 零泄露** |
 | **视觉与体验** | 原生浅色，包含商业推广卡片与外链 | **✅ MikroTik 科技深蓝美学 + 3D 动力双环 Logo + 纯净去推广** |
@@ -254,7 +254,7 @@ docker compose up -d
 
 仓库内置 [`.github/workflows/upstream-sync.yml`](.github/workflows/upstream-sync.yml) CI/CD 自动化流水线：
 - **定时巡检**：每天 **11:00**（北京时间）与 **23:00**（北京时间）自动检测上游 [liandu2024/Open-Box](https://github.com/liandu2024/Open-Box) 的最新 Release；
-- **全自动发布**：当下游检测到新版本发布时，自动触发多架构（`linux/amd64` 与 `linux/arm64`）镜像编译构建，生成与上游版本号一致的 GitHub Releases 离线包与校验码，实现永久无人值守自动同步。
+- **全自动发布**：当检测到上游新版本发布时，自动触发多架构（`linux/amd64` 与 `linux/arm64`）镜像编译构建，生成与上游版本号一致的 GitHub Releases 纯净 `.tar` 离线包并同步推送至 GHCR，实现永久无人值守自动同步。
 
 ---
 
