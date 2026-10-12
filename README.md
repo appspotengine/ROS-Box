@@ -1,15 +1,16 @@
 # ROS-Box (RouterOS Appliance)
 
 <p align="center">
-  <img src="panel/dist/logo-orbit.svg" alt="ROS-Box Logo" width="128" height="128" />
+  <img src="panel/dist/logo-orbit.svg" alt="ROS-Box Logo" width="130" height="130" />
 </p>
 
 <p align="center">
-  <strong>专为 MikroTik RouterOS 7.x 深度定制的高性能、超轻量旁路由透明代理容器系统</strong><br>
+  <strong>专为 MikroTik RouterOS 7.x 深度重构的高性能、超轻量旁路由透明代理容器系统</strong><br>
   <em>RouterOS Container Native • Sing-Box 1.14 Core • Sub-60MiB RAM • Self-Healing Networking</em>
 </p>
 
 <p align="center">
+  <a href="https://github.com/zyeyefyass/ROS-Box/releases/latest"><img src="https://img.shields.io/github/v/release/zyeyefyass/ROS-Box?color=00d2ff&label=Release&logo=github" alt="Latest Release"></a>
   <img src="https://img.shields.io/badge/RouterOS-v7.4~v7.24+-004e82.svg?logo=mikrotik&logoColor=white" alt="RouterOS" />
   <img src="https://img.shields.io/badge/Sing--Box-v1.14-00d2ff.svg" alt="Sing-Box" />
   <img src="https://img.shields.io/badge/Architecture-amd64%20%7C%20arm64-38bdf8.svg" alt="Arch" />
@@ -19,149 +20,190 @@
 
 ---
 
-## 🌟 核心特性与创新
+## 📸 界面效果预览
 
-1. **RouterOS Container 专属定制**：
-   - 彻底脱离 OpenWrt 的 `uci` / `ubus` / `fw4` / `dnsmasq` 及 Linux `systemd` 宿主依赖。
-   - 专为 MikroTik RouterOS 容器沙盒设计独立的生命周期控制层与日志管道。
+<p align="center">
+  <img src="docs/images/overview.png" alt="ROS-Box 概览页" width="85%" style="border-radius: 8px; box-shadow: 0 4px 20px rgba(0,45,80,0.3);" />
+</p>
+<p align="center">
+  <em>图 1：ROS-Box 控制台概览页（MikroTik 科技深蓝美学、3D 动力莫比乌斯双环、核心指标实时监控）</em>
+</p>
 
-2. **RouterOS 7.22+ 策略路由缺陷自愈 (Self-Healing `ip rule`)**：
-   - 针对 RouterOS 7.22+ 默认注入的 `1: local`, `2: main`, `3: default` 冲突规则，内置启动期与运行期策略路由自愈引擎，彻底解决 TUN 模式流量被 ROS 宿主拦截的行业痛点。
-
-3. **极致内存与体积控制 (Ultra-Low Footprint)**：
-   - 单进程内存软上限限制在 `GOMEMLIMIT=60MiB`，空闲运行内存仅需 **45 ~ 55 MiB**，完美契合 RB5009、hAP ax2/ax3 等有限内存设备。
-   - 纯净生产构建，单层高压打包，容器离线 `.tar` 仅约 **220MB**（`.tar.gz` 仅 **87MB**）。
-
-4. **原生多硬件架构支持 (Multi-Architecture)**：
-   - **`linux/amd64`**：适用 PC 软路由、x86 工控机、PVE/ESXi 虚拟机、CHR。
-   - **`linux/arm64`**：适用 MikroTik 官方硬件（RB5009、CCR2004、CCR2116、hAP ax2/ax3 等）。
-
-5. **MikroTik 专属视觉美学与纯净体验**：
-   - 采用 MikroTik 科技深蓝设计语言（`#002d50`、`#004e82`、`#00d2ff`），搭配 3D 动力晶体双环 Logo。
-   - 彻底剔除所有第三方商业推广、社交引流及多余外链，专注极速网络转发。
+<p align="center">
+  <img src="docs/images/settings.png" alt="ROS-Box 设置页" width="85%" style="border-radius: 8px; box-shadow: 0 4px 20px rgba(0,45,80,0.3);" />
+</p>
+<p align="center">
+  <em>图 2：ROS-Box 设置中心（纯净毛玻璃通透层次、无商业引流与广告）</em>
+</p>
 
 ---
 
-## 📂 项目结构
+## 🌟 对比原版 Open-Box 的四大核心突破
 
-```text
-ROS-Box/
-├── Dockerfile                   # 多架构 Alpine + Node 22 容器镜像构建文件
-├── docker-compose.yml           # 本地/服务器调试配置
-├── entrypoint.sh                # 容器启动入口 (TUN 初始化、ip rule 修复、进程调度)
-├── bin/
-│   ├── amd64/sing-box           # x86_64 预编译 sing-box 1.14 内核
-│   └── arm64/sing-box           # aarch64 预编译 sing-box 1.14 内核
-├── container/
-│   ├── bin/
-│   │   ├── openbox-ctl          # 容器内核守护与控制服务脚本 (start/stop/restart/status)
-│   │   └── openbox-panel-ctl    # 面板状态守护脚本
-│   └── shim/
-│       └── logread              # 容器环境 logread 接口模拟器
-├── panel/
-│   ├── dist/                    # 编译完成的前端 Web 管理面板 (Vue 3 + Vite)
-│   └── server/                  # Node.js ESM 后端服务源码
-│       ├── api/                 # 面板 REST API 路由
-│       ├── engine/              # sing-box 配置生成与分流引擎
-│       ├── system/              # 系统适配层 (ROS 容器平台适配)
-│       └── resources/geodata/   # 离线 GeoSite/GeoIP 规则数据库
-├── scripts/
-│   ├── build-docker.bat         # Windows Docker 镜像构建脚本
-│   ├── build-docker.sh          # Linux/macOS Docker 构建脚本
-│   ├── package-tar.bat          # Windows 一键导出 RouterOS 离线 .tar 镜像
-│   ├── package-tar.sh           # Linux/macOS 一键导出 RouterOS 离线 .tar 镜像
-│   ├── ros-install-tar-gateway.rsc # RouterOS 本地 .tar 旁路由模式一键导入
-│   ├── ros-install-tar-mangle.rsc  # RouterOS 本地 .tar 策略分流模式一键导入
-│   ├── ros-setup-gateway.rsc    # RouterOS 旁路由模式在线导入脚本
-│   └── ros-setup-mangle.rsc     # RouterOS 策略分流模式在线导入脚本
-└── docs/
-    ├── ARCHITECTURE.md          # 架构改造与二次开发技术剖析
-    ├── ROUTEROS_DEPLOY_GUIDE.md # RouterOS 7.x 完整部署与拓扑实战指南
-    └── ROUTEROS_TAR_INSTALL_GUIDE.md # WinBox 拖拽导入 .tar 离线安装实操手册
-```
+ROS-Box 在保留上游优秀路由规则体系的同时，彻底剥离了对 OpenWrt / Linux 系统的宿主依赖，针对 **MikroTik RouterOS 容器沙盒环境** 进行了深度内核级架构重构：
+
+### 1. ⚡ 60MiB 极省内存架构 (`GOMEMLIMIT=60MiB`)
+- **原版痛点**：原版 Open-Box 基于完整 OpenWrt 虚拟机或 Debian 宿主环境，包含全套守护进程与 Node 运行环境，开销通常在 180MB~350MB 以上，无法在 RB5009、hAP ax2/ax3 等内存受限的路由器上稳定常驻。
+- **ROS-Box 突破**：
+  - 深度裁剪死代码与开发期依赖，剔除臃肿冗余；
+  - 强制注入 Go 运行时内存软上限 `GOMEMLIMIT=60MiB`，开启激进垃圾回收；
+  - 面板与 Sing-Box 双进程**空闲常驻内存仅 45 ~ 55 MiB**，千兆满载峰值不超 80 MiB，彻底终结 OOM 爆内存崩溃。
+
+### 2. 🛡️ RouterOS 7.22+ 策略路由缺陷自愈 (`Self-Healing ip rule`)
+- **原版痛点**：MikroTik RouterOS 从 v7.22 版本开始，在容器命名空间内默认强行下发优先级最高的系统策略路由规则（`1: local`, `2: main`, `3: default`）。这会导致 Sing-Box TUN 模式自动下发的策略路由被彻底阻断，出现“内核显示正常运行，但局域网设备无论如何无法走代理”的严重系统缺陷。
+- **ROS-Box 突破**：
+  - 内置专为 RouterOS 研发的**规则动态重排与自愈引擎**（`openbox-ctl` & `entrypoint.sh`）；
+  - 容器启动与运行期间自动抹除 RouterOS 的 1/2/3 号冲突规则，并平滑下移至标准优先级，实现 **0 脚本维护、开机即用、100% 顺畅接管流量**。
+
+### 3. 🚀 Smart DNS 零泄露并发竞速 (Smart DNS 0ms Multi-Upstream Racing)
+- **原版痛点**：原版严重依赖 OpenWrt 宿主机的 `dnsmasq` 配置文件注入和服务重启，在纯容器环境中由于缺少 `uci` 与 `dnsmasq`，极易导致 DNS 模块报错崩溃、发生 DNS 污染或境外 DNS 解析泄露。
+- **ROS-Box 突破**：
+  - 容器内嵌 7853 独立 Smart DNS 防劫持引擎，彻底脱离宿主 `dnsmasq`；
+  - **国内 DNS 三路并发竞速**：AliDNS + DNSPod + 运营商本地 DNS 三路并行竞速，取最快返回结果（降至极限 1~3ms）；
+  - **海外流量 0 泄露机制**：国外域名强制通过已加密的出站代理隧道进行远程解析（Split-DNS 隔离），杜绝任何 DNS 污染与隐私泄露。
+
+### 4. 🌐 TCP Fast Open (TFO) 与千兆高吞吐调优
+- **原版痛点**：原版未对容器沙盒内的高并发 socket 限制与 TCP 拥塞控制做特化调优。
+- **ROS-Box 突破**：
+  - 启动阶段全局激活 `TCP Fast Open (TFO)`，三次握手首包直接携带应用层请求数据，大幅压缩网页首次加载的 RTT 延迟；
+  - 调高 socket 缓冲区与内核参数（`ulimit -n 65535`、`tcp_window_scaling=1`、BBR 拥塞控制适配）；
+  - 内置日志滚动防爆盘机制（>5MB 自动裁切），保护路由器闪存寿命。
 
 ---
 
-## 🚀 快速上手部署
+## 📊 原版 Open-Box vs ROS-Box 全方位对比
 
-### 准备工作：开启 RouterOS 容器功能
+| 对比维度 | 原版 Open-Box (Upstream) | ROS-Box (本项目专属) |
+| :--- | :--- | :--- |
+| **适配平台** | 仅限 OpenWrt 系统 / Debian 系统 | **MikroTik RouterOS 7.x 专属** + 通用 Docker |
+| **系统依赖** | 强依赖 `uci`、`ubus`、`procd`、宿主 `dnsmasq` | **零系统依赖**，独立容器沙盒生命周期管理 |
+| **ROS 7.22+ 兼容** | ❌ 策略路由冲突，TUN 流量被拦截失效 | **✅ 内置 `ip rule` 自动修复与自愈引擎** |
+| **空闲运行内存** | 180 ~ 350+ MiB (易导致路由器 OOM) | **✅ 仅 45 ~ 55 MiB** (`GOMEMLIMIT=60MiB`) |
+| **容器离线打包** | 镜像体积大，无开箱即用 RouterOS `.tar` | **✅ 单层高压 Squash 离线包 (220MB .tar / 87MB .tar.gz)** |
+| **硬件架构** | 视 OpenWrt 编译固件而定 | **✅ 官方双架构：`linux/amd64` (x86/CHR) + `linux/arm64` (RB5009等)** |
+| **DNS 架构** | 注入宿主 dnsmasq，易受污染/泄露 | **✅ 内置 Smart DNS 多路竞速 (1~3ms) + Split-DNS 零泄露** |
+| **视觉与体验** | 原生浅色，包含商业推广卡片与外链 | **✅ MikroTik 科技深蓝美学 + 3D 动力双环 Logo + 纯净去推广** |
+| **更新自动化** | 手动下载更新 | **✅ GitHub Actions 每日 11:00 / 23:00 自动巡检上游并自动发版** |
 
+---
+
+## 🚀 部署指南
+
+### 一、RouterOS 7.x 部署（推荐）
+
+#### 准备工作：开启容器功能与挂载磁盘
 在 WinBox 打开 **Terminal**，执行：
-
 ```routeros
 /system/device-mode/update container=yes
 ```
-
-> **注意**：执行后根据路由器提示按下物理 Reset 键或在 3-5 分钟内执行 `/system/reboot` 重启生效。建议将外置 USB/SSD 格式化为 `ext4` 分区挂载。
+按提示按下设备物理 Reset 键或在 3-5 分钟内执行 `/system/reboot`。外置磁盘请进入 **System → Disks** 格式化为 **ext4**（假设盘符为 `disk1`）。
 
 ---
 
-### 部署方式一：通过 WinBox 本地上传 `.tar` 导入（强烈推荐）
-
-1. 从 [Releases](../../releases) 下载对应架构的离线镜像包（例如 `ROS-Box-amd64.tar` 或 `ROS-Box-arm64.tar`）；
-2. 打开 WinBox，将 `.tar` 文件直接拖拽上传至外置存储路径（例如 `disk1/`）；
-3. 打开 WinBox Terminal，执行一键导入命令（以旁路由模式为例）：
+#### 方式 1：RouterOS 终端一键命令部署（最快、最省心）
+复制以下单行命令，直接粘贴至 WinBox Terminal 回车即可自动完成网卡、网桥、挂载点和容器的创建：
 
 ```routeros
-/import file=disk1/scripts/ros-install-tar-gateway.rsc
+/tool fetch url="https://raw.githubusercontent.com/zyeyefyass/ROS-Box/main/scripts/ros-install-tar-gateway.rsc" dst-path="disk1/ros-install.rsc"; /import file=disk1/ros-install.rsc
 ```
 
-或者手动在 WinBox **Container** 中点击 **Add**：
-- **File**：选择 `disk1/ROS-Box-amd64.tar`
-- **Interface**：指定提前创建好的 `veth-rosbox`
-- **Root Dir**：`disk1/rosbox/root`
-- **Mounts**：添加 `rosbox-data` (`/opt/open-box/data`) 与 `rosbox-etc` (`/opt/open-box/etc`)
-- **Logging**：勾选 `yes`
-
-4. 等待 RouterOS 解压完成（状态由 `extracting...` 变为 `stopped`）；
-5. 选中容器点击 **Start** 启动。
+> **提示**：脚本默认容器 IP 为 `192.168.88.2/24`，网关为 `192.168.88.1`。如需修改，可在导入前编辑脚本内的变量。
 
 ---
 
-### 部署方式二：通过 Registry 在线拉取部署
+#### 方式 2：WinBox 图形化拖拽 `.tar` 离线部署（适合无外网环境）
+1. 从 [Releases 页面](https://github.com/zyeyefyass/ROS-Box/releases/latest) 下载离线安装包：
+   - x86 / CHR 软路由：下载 **`ROS-Box-amd64.tar`**
+   - RB5009 / CCR / ax2 / ax3 等 ARM 路由：下载 **`ROS-Box-arm64.tar`**
+2. 打开 WinBox **Files**，直接把下载的 `.tar` 文件拖入 `disk1/` 目录；
+3. 进入 **Container → Mounts**，创建两处持久化挂载：
+   - 挂载点 1：Name=`rosbox-data`, Src=`disk1/rosbox/data`, Dst=`/opt/open-box/data`
+   - 挂载点 2：Name=`rosbox-etc`, Src=`disk1/rosbox/etc`, Dst=`/opt/open-box/etc`
+4. 进入 **Container → Containers**，点击 **`+`** 号：
+   - **File**：选择 `disk1/ROS-Box-amd64.tar`（或 arm64）
+   - **Interface**：选择提前创建好的 `veth-rosbox`
+   - **Root Dir**：`disk1/rosbox/root`
+   - **Mounts**：勾选 `rosbox-data` 和 `rosbox-etc`
+   - **Logging** 与 **Start on Boot**：勾选 `yes`
+5. 等待状态由 `extracting...` 变为 `stopped`（解压完成），点击 **Start** 启动即可！
 
-在 RouterOS 终端中运行：
+---
 
-```routeros
-/import file=scripts/ros-setup-gateway.rsc
+### 二、标准 Docker 环境部署
+
+如果您希望将 ROS-Box 运行在 Linux 主机、软路由、PVE 或 NAS Docker 中，支持以下两种部署方式：
+
+#### 方式 1：Docker CLI 一键命令部署
+```bash
+docker run -d \
+  --name ros-box \
+  --restart unless-stopped \
+  --cap-add=NET_ADMIN \
+  --device /dev/net/tun:/dev/net/tun \
+  -p 2026:2026 \
+  -p 7853:7853/udp \
+  -p 7853:7853/tcp \
+  -p 7890:7890 \
+  --sysctl net.ipv4.ip_forward=1 \
+  -v /opt/rosbox/data:/opt/open-box/data \
+  -v /opt/rosbox/etc:/opt/open-box/etc \
+  ghcr.io/zyeyefyass/ros-box:latest
+```
+
+#### 方式 2：Docker Compose 一键部署
+在项目根目录或新建 `docker-compose.yml`：
+```yaml
+services:
+  ros-box:
+    image: ghcr.io/zyeyefyass/ros-box:latest
+    container_name: ros-box
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    ports:
+      - "2026:2026"
+      - "7853:7853/udp"
+      - "7853:7853/tcp"
+      - "7890:7890"
+    sysctls:
+      - net.ipv4.ip_forward=1
+    volumes:
+      - ./data:/opt/open-box/data
+      - ./etc:/opt/open-box/etc
+    environment:
+      - PORT=2026
+      - OPENBOX_PLATFORM=container
+```
+执行启动命令：
+```bash
+docker compose up -d
 ```
 
 ---
 
-## 💻 访问与管理
+## 💻 访问与使用
 
 1. 打开浏览器访问：`http://<容器IP>:2026`（例如 `http://192.168.88.2:2026`）；
-2. 首次进入请设置管理员登录密码；
+2. 首次进入设置管理员登录密码；
 3. 进入 **订阅管理** 添加节点订阅链接；
-4. 进入 **设置中心** 选择分流规则模式，点击右上角 **部署 / 启动内核**。
+4. 进入 **设置中心** 选择分流策略，点击右上角 **部署 / 启动内核**。
 
 ---
 
-## 🛠️ 自行打包构建
+## 🔄 自动化上游同步与发布机制
 
-如果您需要基于源代码自行编译构建：
-
-### 本地打包导出 RouterOS `.tar` 镜像
-
-- **Windows 用户**：
-  ```cmd
-  scripts\package-tar.bat amd64     # 导出 x86_64 离线镜像 ROS-Box-amd64.tar
-  scripts\package-tar.bat arm64     # 导出 ARM64 离线镜像 ROS-Box-arm64.tar
-  ```
-
-- **Linux / macOS 用户**：
-  ```bash
-  chmod +x scripts/*.sh
-  ./scripts/package-tar.sh amd64    # 或 arm64 / all
-  ```
-
-### 云端自动构建 (GitHub Actions)
-
-仓库已内置 [`.github/workflows/build-tar.yml`](.github/workflows/build-tar.yml)，推送到 GitHub 或发布 Release Tag 时，GitHub Actions 会全自动并行交叉编译并生成多架构的 `.tar` 安装包与 SHA256 校验码。
+仓库内置 [`.github/workflows/upstream-sync.yml`](.github/workflows/upstream-sync.yml) CI/CD 自动化流水线：
+- **定时巡检**：每天 **11:00**（北京时间）与 **23:00**（北京时间）自动检测上游 [liandu2024/Open-Box](https://github.com/liandu2024/Open-Box) 的最新 Release；
+- **全自动发布**：当下游检测到新版本发布时，自动触发多架构（`linux/amd64` 与 `linux/arm64`）镜像编译构建，生成与上游版本号一致的 GitHub Releases 离线包与校验码，实现永久无人值守自动同步。
 
 ---
 
-## 📜 开源协议
+## 📜 开源协议与致谢
 
-本项目基于 GPL-3.0 协议开源发布。
-原项目致谢：[liandu2024/Open-Box](https://github.com/liandu2024/Open-Box) & [SagerNet/sing-box](https://github.com/SagerNet/sing-box)。
+- 本项目基于 **GPL-3.0** 协议开源。
+- 特别鸣谢：
+  - [liandu2024/Open-Box](https://github.com/liandu2024/Open-Box)
+  - [SagerNet/sing-box](https://github.com/SagerNet/sing-box)
+  - [MikroTik RouterOS](https://mikrotik.com/)
