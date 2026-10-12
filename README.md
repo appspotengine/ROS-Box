@@ -114,37 +114,78 @@ ROS-Box 在保留上游优秀路由规则体系的同时，彻底剥离了对 Op
 
 ---
 
-#### 方式 1：RouterOS 终端一键命令部署（最快、最省心）
-复制以下单行命令，直接粘贴至 WinBox Terminal 回车即可自动完成挂载点与容器的极速拉取与创建：
+### 🇨🇳 针对国内无科学上网环境的三大极速部署方案 (100% 成功率)
 
+在初次配置旁路由时，RouterOS 本身往往无法直接访问 GitHub。为此我们深度适配了国内加速镜像与纯离线部署通道，无需任何科学上网环境即可秒级完成安装：
+
+#### 方案一：国内加速镜像直连（纯命令行一键部署，推荐 ⭐⭐⭐⭐⭐）
+直接复制命令粘贴进 WinBox **Terminal** 回车，RouterOS 将通过国内高速镜像节点（`ghproxy.net`）自动拉取镜像并部署：
+
+1. **自动拉取镜像包至路由器外置磁盘（按设备架构二选一）**：
+   - **x86 PC 软路由 / CHR 虚拟机 / 工控机 (`amd64`)**：
+     ```routeros
+     /tool fetch url="https://ghproxy.net/https://github.com/zyeyefyass/ROS-Box/releases/download/v0.1.317/ROS-Box-amd64.tar" dst-path="disk1/ROS-Box-amd64.tar" mode=https
+     ```
+   - **MikroTik RB5009 / CCR / ax2 / ax3 (`arm64`)**：
+     ```routeros
+     /tool fetch url="https://ghproxy.net/https://github.com/zyeyefyass/ROS-Box/releases/download/v0.1.317/ROS-Box-arm64.tar" dst-path="disk1/ROS-Box-arm64.tar" mode=https
+     ```
+
+2. **一键创建网卡、挂载点并导入容器**：
+   在 Terminal 中粘贴执行以下纯本地配置（以 x86 为例，ARM64 请将 `file=` 参数改为 `disk1/ROS-Box-arm64.tar`）：
+   ```routeros
+   # 1. 确保虚拟网卡与网桥就绪
+   /interface/veth add name=veth-rosbox address=192.168.88.2/24 gateway=192.168.88.1
+   /interface/bridge/port add bridge=bridge interface=veth-rosbox comment="ROS-Box Container VETH"
+
+   # 2. 建立持久化数据挂载卷
+   /container/mounts add name=rosbox-data src="disk1/rosbox/data" dst="/opt/open-box/data"
+   /container/mounts add name=rosbox-etc src="disk1/rosbox/etc" dst="/opt/open-box/etc"
+
+   # 3. 导入本地镜像创建容器
+   /container add file=disk1/ROS-Box-amd64.tar interface=veth-rosbox root-dir=disk1/rosbox/root mounts=rosbox-data,rosbox-etc logging=yes start-on-boot=yes comment="ROS-Box"
+   ```
+
+3. **启动容器**：
+   观察 WinBox Container 列表中状态从 `extracting...` 变为 `stopped` 后执行：
+   ```routeros
+   /container/start [find comment="ROS-Box"]
+   ```
+
+---
+
+#### 方案二：PC 电脑拖拽 WinBox Files + 纯离线命令（最稳固，零网络依赖）
+电脑端下载安装包通常比路由器更灵活：
+
+1. **电脑直接下载离线镜像包（国内直连加速链接）**：
+   - 💻 [ROS-Box-amd64.tar 国内加速下载 (x86/CHR)](https://ghproxy.net/https://github.com/zyeyefyass/ROS-Box/releases/download/v0.1.317/ROS-Box-amd64.tar)
+   - 📱 [ROS-Box-arm64.tar 国内加速下载 (RB5009/CCR/ax等)](https://ghproxy.net/https://github.com/zyeyefyass/ROS-Box/releases/download/v0.1.317/ROS-Box-arm64.tar)
+2. **WinBox 极速拖拽**：
+   打开 WinBox 左侧菜单 **Files**，直接把下载好的 `.tar` 文件拖入 `disk1/` 目录（内网千兆仅需 5~10 秒）。
+3. **在 Terminal 执行方案一的第 2、3 步配置命令** 即可完成秒级导入！
+
+---
+
+#### 方案三：局域网内部飞速中转拉取（零公网流量，千兆内网直传）
+如果路由器当前无法连接外网，可利用同局域网的电脑快速分发：
+1. 在存放 `ROS-Box-amd64.tar` 的电脑文件夹中打开终端（PowerShell / CMD），启动临时微型 HTTP 服务：
+   ```powershell
+   python -m http.server 8000
+   ```
+2. 在 RouterOS Terminal 中直接向局域网电脑拉取（假设电脑 IP 为 `192.168.88.10`）：
+   ```routeros
+   /tool fetch url="http://192.168.88.10:8000/ROS-Box-amd64.tar" dst-path="disk1/ROS-Box-amd64.tar"
+   ```
+3. 拉取完成后，直接执行容器导入命令即可。
+
+---
+
+### 🌐 海外/已有代理环境一键直连命令
+
+如果您的路由器环境已具备国际互联网访问能力，可直接运行一键式远程脚本：
 ```routeros
 /tool fetch url="https://raw.githubusercontent.com/zyeyefyass/ROS-Box/main/scripts/ros-install-tar-gateway.rsc" dst-path="disk1/ros-install.rsc"; /import file=disk1/ros-install.rsc
 ```
-
-> **提示**：脚本默认容器 IP 为 `192.168.88.2/24`，网关为 `192.168.88.1`。如需修改，可在导入前编辑脚本内的变量。
-
----
-
-#### 方式 2：WinBox 图形化拖拽 `.tar` 离线部署（适合无外网环境）
-1. 从 [Releases 页面](https://github.com/zyeyefyass/ROS-Box/releases/latest) 下载离线安装包：
-   - x86 / CHR 软路由：下载 **`ROS-Box-amd64.tar`**
-   - RB5009 / CCR / ax2 / ax3 等 ARM 路由：下载 **`ROS-Box-arm64.tar`**
-2. 打开 WinBox **Files**，直接把下载的 `.tar` 文件拖入 `disk1/` 目录；
-3. **确认虚拟网卡已加入 Bridge**（若准备工作第 3 步已执行可跳过）：
-   - WinBox **Interfaces → VETH**：确保 `veth-rosbox` 存在；
-   - WinBox **Bridge → Ports**：确保 `veth-rosbox` 已作为 Port 加入主 LAN `bridge`；
-4. 进入 **Container → Mounts**，创建两处持久化挂载：
-   - 挂载点 1：Name=`rosbox-data`, Src=`disk1/rosbox/data`, Dst=`/opt/open-box/data`
-   - 挂载点 2：Name=`rosbox-etc`, Src=`disk1/rosbox/etc`, Dst=`/opt/open-box/etc`
-5. 进入 **Container → Containers**，点击 **`+`** 号：
-   - **File**：选择 `disk1/ROS-Box-amd64.tar`（或 arm64 包）
-   - **Interface**：选择下拉菜单中的 **`veth-rosbox`**
-   - **Root Dir**：`disk1/rosbox/root`
-   - **Mounts**：勾选 `rosbox-data` 和 `rosbox-etc`
-   - **Logging** 与 **Start on Boot**：勾选 `yes`
-6. 点击 **Apply/OK**，等待状态由 `extracting...` 变为 `stopped`（解压完成），点击 **Start** 启动即可！
-
----
 
 ### 二、标准 Docker 环境部署
 
