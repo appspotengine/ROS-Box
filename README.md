@@ -5,14 +5,15 @@
 </p>
 
 <p align="center">
-  <strong>专为 MikroTik RouterOS 7.x 深度重构的高性能、超轻量旁路由透明代理容器系统</strong><br>
-  <em>RouterOS Container Native • Sing-Box 1.14 Core • Sub-60MiB RAM • Self-Healing Networking</em>
+  <strong>专为 MikroTik RouterOS 7.x 与 NAS Docker（飞牛 fnOS / 群晖 / Unraid）深度打造的高性能、超轻量旁路由透明代理容器系统</strong><br>
+  <em>RouterOS & Docker Native • Sing-Box 1.14 Core • Sub-60MiB RAM • Smart DNS & Self-Healing Networking</em>
 </p>
 
 <p align="center">
   <a href="https://github.com/zyeyefyass/ROS-Box/releases/latest"><img src="https://img.shields.io/github/v/release/zyeyefyass/ROS-Box?color=00d2ff&label=Release&logo=github" alt="Latest Release"></a>
   <a href="https://hub.docker.com/r/fyasshole/ros-box"><img src="https://img.shields.io/badge/Docker_Hub-fyasshole%2Fros--box-2496ED?logo=docker&logoColor=white" alt="Docker Hub"></a>
   <img src="https://img.shields.io/badge/RouterOS-v7.4~v7.24+-004e82.svg?logo=mikrotik&logoColor=white" alt="RouterOS" />
+  <img src="https://img.shields.io/badge/NAS_Docker-fnOS%20%7C%20Synology%20%7C%20Unraid-0ea5e9.svg?logo=docker&logoColor=white" alt="NAS Docker" />
   <img src="https://img.shields.io/badge/Sing--Box-v1.14-00d2ff.svg" alt="Sing-Box" />
   <img src="https://img.shields.io/badge/Architecture-amd64%20%7C%20arm64-38bdf8.svg" alt="Arch" />
   <img src="https://img.shields.io/badge/Memory-45~55MiB%20Idle-10b981.svg" alt="Memory" />
@@ -41,7 +42,7 @@
 
 ## 🌟 对比原版 Open-Box 的四大核心突破
 
-ROS-Box 在保留上游优秀路由规则体系的同时，彻底剥离了对 OpenWrt / Linux 系统的宿主依赖，针对 **MikroTik RouterOS 容器沙盒环境** 进行了深度内核级架构重构：
+ROS-Box 在保留上游优秀路由规则体系的同时，彻底剥离了对 OpenWrt 宿主系统的强耦合依赖，针对 **MikroTik RouterOS 7.x 容器沙盒** 与 **飞牛 fnOS / 群晖 / Unraid 等全平台 Docker 环境** 进行了深度内核级架构重构：
 
 ### 1. ⚡ 60MiB 极省内存架构 (`GOMEMLIMIT=60MiB`)
 - **原版痛点**：原版 Open-Box 基于完整 OpenWrt 虚拟机或 Debian 宿主环境，包含全套守护进程与 Node 运行环境，开销通常在 180MB~350MB 以上，无法在 RB5009、hAP ax2/ax3 等内存受限的路由器上稳定常驻。
@@ -76,12 +77,12 @@ ROS-Box 在保留上游优秀路由规则体系的同时，彻底剥离了对 Op
 
 | 对比维度 | 原版 Open-Box (Upstream) | ROS-Box (本项目专属) |
 | :--- | :--- | :--- |
-| **适配平台** | 仅限 OpenWrt 系统 / Debian 系统 | **MikroTik RouterOS 7.x 专属** + 通用 Docker |
+| **适配平台** | 仅限 OpenWrt 系统 / Debian 系统 | **MikroTik RouterOS 7.x + 飞牛 fnOS / 群晖 / Unraid / 全平台 Docker** |
 | **系统依赖** | 强依赖 `uci`、`ubus`、`procd`、宿主 `dnsmasq` | **零系统依赖**，独立容器沙盒生命周期管理 |
 | **ROS 7.22+ 兼容** | ❌ 策略路由冲突，TUN 流量被拦截失效 | **✅ 内置 `ip rule` 自动修复与自愈引擎** |
 | **空闲运行内存** | 180 ~ 350+ MiB (易导致路由器 OOM) | **✅ 仅 45 ~ 55 MiB** (`GOMEMLIMIT=60MiB`) |
 | **容器离线打包** | 镜像体积大，无开箱即用 RouterOS `.tar` | **✅ 内置 Gzip 高压 `.tar` 离线包 (~111 MB，解压后 223 MiB)** |
-| **硬件架构** | 视 OpenWrt 编译固件而定 | **✅ 官方双架构：`linux/amd64` (x86/CHR) + `linux/arm64` (RB5009等)** |
+| **硬件架构** | 视 OpenWrt 编译固件而定 | **✅ 官方双架构：`linux/amd64` (x86/CHR/NAS) + `linux/arm64` (RB5009等)** |
 | **DNS 架构** | 注入宿主 dnsmasq，易受污染/泄露 | **✅ 内置 Smart DNS 多路竞速 (1~3ms) + Split-DNS 零泄露** |
 | **视觉与体验** | 原生浅色，包含商业推广卡片与外链 | **✅ MikroTik 科技深蓝美学 + 3D 动力双环 Logo + 纯净去推广** |
 | **更新自动化** | 手动下载更新 | **✅ GitHub Actions 每日 11:00 / 23:00 自动巡检上游并自动发版** |
