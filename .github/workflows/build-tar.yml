@@ -27,7 +27,7 @@ jobs:
           docker buildx build \
             --platform linux/amd64 \
             -t ros-box:amd64 \
-            --output type=docker,dest=ROS-Box-amd64.tar \
+            --output type=docker,compression=uncompressed,dest=ROS-Box-amd64.tar \
             .
 
       - name: Build and Export linux/arm64 Tarball
@@ -35,7 +35,7 @@ jobs:
           docker buildx build \
             --platform linux/arm64 \
             -t ros-box:arm64 \
-            --output type=docker,dest=ROS-Box-arm64.tar \
+            --output type=docker,compression=uncompressed,dest=ROS-Box-arm64.tar \
             .
 
       - name: Generate SHA256 Checksums
