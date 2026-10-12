@@ -1,10 +1,10 @@
 import express from 'express'
 import {
-  cancelUpdate, compareVersions, fetchLatestVersion, fetchReleaseNote, readChannel, readMeta, readUpdateLogTail,
+  cancelUpdate, compareVersions, fetchLatestVersion, fetchReleaseNote, fetchLatestRosVersion, readChannel, readMeta, readUpdateLogTail,
   readJsonFile, readUpdateStatus, startUpdate,
 } from '../system/updater.mjs'
 
-const CHANNELS = new Set(['auto', 'direct', 'mirror'])
+const CHANNELS = new Set(['direct', 'mirror', 'auto'])
 
 // 发起升级前探一下最新 tag(直连不通就走镜像,见 fetchLatestVersion);探不到就空着,
 // 脚本会自己再试一次直连,再不行退回稳定资产名
@@ -39,12 +39,32 @@ export const registerUpdateRoutes = (app, { ctx, paths, fetchImpl = globalThis.f
     })
   })
 
-  // GET /api/openbox/update/check —— 探最新版
+  // GET /api/openbox/update/check —— 探最新版 ROS-Box
   router.get('/update/check', async (_req, res) => {
     try {
       const meta = await readMeta(ctx, paths)
       const { latest, via } = await fetchLatestVersion(fetchImpl)
       res.json({ current: meta.version || '', latest, via, hasUpdate: compareVersions(latest, meta.version) > 0 })
+    } catch (error) {
+      res.status(503).json({ message: error instanceof Error ? error.message : String(error) })
+    }
+  })
+
+  // GET /api/openbox/update/ros/check —— 检查 RouterOS 版本 (来自 elseif/MikroTikPatch)
+  router.get('/update/ros/check', async (_req, res) => {
+    try {
+      const ros = await fetchLatestRosVersion(fetchImpl)
+      const currentRos = '7.24.5' // RouterOS 当前运行版本
+      res.json({
+        current: currentRos,
+        latest: ros.latest,
+        name: ros.name,
+        url: ros.url,
+        body: ros.body,
+        publishedAt: ros.publishedAt,
+        via: ros.via,
+        hasUpdate: compareVersions(ros.latest, currentRos) > 0
+      })
     } catch (error) {
       res.status(503).json({ message: error instanceof Error ? error.message : String(error) })
     }

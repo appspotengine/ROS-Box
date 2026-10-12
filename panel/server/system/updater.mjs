@@ -3,8 +3,8 @@
 // 升级本身交给随包发布的 scripts/update.sh(--detach 后台跑、--cancel 协作式取消、
 // /tmp/openbox-update.status 报进度),面板只负责:读版本、探最新版、发起/取消、
 // 读进度。这样 LuCI 兜底页和面板用的是同一条升级路径,不会各有一套坑。
-export const REPO = 'liandu2024/Open-Box'
-export const UPDATE_MIRRORS = ['', 'https://ghfast.top/', 'https://gh-proxy.com/', 'https://gh.llkk.cc/']
+export const REPO = 'zyeyefyass/ROS-Box'
+export const UPDATE_MIRRORS = ['', 'https://ghproxy.net/']
 
 export const parseKeyValues = (text) => {
   const out = {}
@@ -201,4 +201,52 @@ export const writeJsonFile = async (ctx, path, data) => {
   const dir = path.slice(0, path.lastIndexOf('/'))
   if (dir) await ctx.mkdirp(dir)
   await ctx.writeFile(path, JSON.stringify(data))
+}
+
+// RouterOS 版本检查源: elseif/MikroTikPatch
+export const ROS_PATCH_REPO = 'elseif/MikroTikPatch'
+export const fetchLatestRosVersion = async (fetchImpl = globalThis.fetch, { timeoutMs = 8000 } = {}) => {
+  const get = async (url) => {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), timeoutMs)
+    try {
+      return await fetchImpl(url, { headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'ROS-Box' }, signal: controller.signal })
+    } finally {
+      clearTimeout(timer)
+    }
+  }
+  let err = ''
+  for (const prefix of ['', 'https://ghproxy.net/']) {
+    try {
+      const res = await get(`${prefix}https://api.github.com/repos/${ROS_PATCH_REPO}/releases/latest`)
+      if (!res.ok) continue
+      const data = await res.json()
+      if (data && data.tag_name) {
+        return {
+          latest: data.tag_name,
+          name: data.name || data.tag_name,
+          url: data.html_url || `https://github.com/${ROS_PATCH_REPO}/releases/tag/${data.tag_name}`,
+          body: data.body || '',
+          publishedAt: data.published_at || '',
+          via: prefix || 'direct'
+        }
+      }
+    } catch (e) {
+      err = e instanceof Error ? e.message : String(e)
+    }
+  }
+  // 备用通过 releases/latest 302 跳转获取 tag
+  try {
+    const res = await fetchLatestTag(fetchImpl, ROS_PATCH_REPO, { timeoutMs })
+    return {
+      latest: res.latest,
+      name: `RouterOS ${res.latest}`,
+      url: `https://github.com/${ROS_PATCH_REPO}/releases/tag/${res.latest}`,
+      body: '',
+      publishedAt: '',
+      via: res.via
+    }
+  } catch (e) {
+    throw new Error(`无法获取 RouterOS 最新版本: ${err || e.message}`)
+  }
 }
