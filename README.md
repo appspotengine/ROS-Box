@@ -94,7 +94,7 @@ ROS-Box 在保留上游优秀路由规则体系的同时，彻底剥离了对 Op
 
 ### 一、RouterOS 7.x 部署（推荐）
 
-#### 准备工作：开启容器功能、磁盘挂载与虚拟网卡配置
+#### 准备工作：开启容器功能、存储目录与虚拟网卡配置
 
 1. **开启容器功能**：
    在 WinBox 打开 **Terminal**，执行：
@@ -102,8 +102,9 @@ ROS-Box 在保留上游优秀路由规则体系的同时，彻底剥离了对 Op
    /system/device-mode/update container=yes
    ```
    按提示按下设备物理 Reset 键或在 3-5 分钟内执行 `/system/reboot`。
-2. **挂载外置存储**：
-   外置 USB/SSD 请进入 **System → Disks** 格式化为 **ext4**（假设盘符为 `disk1`）。
+2. **准备存储目录（`/disk1`）**：
+   - **大多数场景（x86 软路由 / PVE / ESXi / CHR / RB5009 等内置空间充足设备）**：**无需外接硬盘**，直接在 RouterOS 内置存储中创建或使用 `/disk1` 目录即可（执行下方挂载点命令时系统也会在根目录自动生成 `/disk1/rosbox/...`）。
+   - **小闪存硬件（可选，如 128MB 闪存的 hAP ax2/ax3）**：如内置空间不足，可插入外置 USB/SSD 并在 **System → Disks** 格式化为 **ext4**（默认挂载名同样为 `disk1`）。
 3. **创建虚拟网卡 (VETH) 并加入局域网网桥 (Bridge)**：
    *这一步是容器与局域网设备互通的关键，请在 Terminal 中执行以下两行命令：*
    ```routeros
@@ -124,7 +125,7 @@ ROS-Box 在保留上游优秀路由规则体系的同时，彻底剥离了对 Op
 #### 方案一：国内加速镜像直连（纯命令行一键部署，推荐 ⭐⭐⭐⭐⭐）
 直接复制命令粘贴进 WinBox **Terminal** 回车，RouterOS 将通过国内高速镜像节点（`ghproxy.net`）自动拉取镜像并部署：
 
-1. **自动拉取镜像包至路由器外置磁盘（按设备架构二选一）**：
+1. **自动拉取镜像包至路由器 `/disk1` 目录（按设备架构二选一）**：
    - **x86 PC 软路由 / CHR 虚拟机 / 工控机 (`amd64`)**：
      ```routeros
      /tool fetch url="https://ghproxy.net/https://github.com/zyeyefyass/ROS-Box/releases/download/v0.1.317/ROS-Box-amd64.tar" dst-path="disk1/ROS-Box-amd64.tar" mode=https
