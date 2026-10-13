@@ -43,34 +43,22 @@
 
 ## 🌟 对比原版 Open-Box 的四大核心突破
 
-ROS-Box 在保留上游优秀路由规则体系的同时，彻底剥离了对 OpenWrt 宿主系统的强耦合依赖，针对 **MikroTik RouterOS 7.x 容器沙盒**、**飞牛 fnOS / 群晖 / Unraid 等 NAS Docker 环境** 以及 **Linux 物理机 / 虚拟机（Debian / Ubuntu / Armbian / PVE）** 进行了深度内核级架构重构：
+ROS-Box 在保留上游优秀路由规则体系的同时，剥离了对 OpenWrt 宿主系统的强耦合依赖，针对 **MikroTik RouterOS 7.x 容器沙盒**、**飞牛 fnOS / 群晖 / Unraid 等 NAS Docker** 以及 **Linux 物理机 / 虚拟机（Debian / Ubuntu / Armbian / PVE）** 进行了内核级重构：
 
 ### 1. ⚡ 60MiB 极省内存架构 (`GOMEMLIMIT=60MiB`)
-- **原版痛点**：原版 Open-Box 基于完整 OpenWrt 虚拟机或臃肿宿主环境，包含全套守护进程与 Node 运行环境，开销通常在 180MB~350MB 以上，无法在 RB5009、hAP ax2/ax3 或低功耗 ARM 盒子上稳定常驻。
-- **ROS-Box 突破**：
-  - 深度裁剪死代码与开发期依赖，剔除臃肿冗余；
-  - 强制注入 Go 运行时内存软上限 `GOMEMLIMIT=60MiB`，开启激进垃圾回收；
-  - 面板与 Sing-Box 双进程**空闲常驻内存仅 45 ~ 55 MiB**，千兆满载峰值不超 80 MiB，彻底终结 OOM 爆内存崩溃。
+- **原版痛点**：基于完整 OpenWrt 或臃肿宿主环境，内存开销常在 180~350MB 以上，易在 RB5009、hAP ax2/ax3 或低功耗盒子上触发 OOM。
+- **ROS-Box 突破**：深度裁剪冗余依赖并注入 `GOMEMLIMIT=60MiB` 软上限；面板与 Sing-Box 双进程**空闲常驻仅 45 ~ 55 MiB**，千兆满载峰值不超 80 MiB。
 
 ### 2. 🛡️ RouterOS 7.22+ 策略路由缺陷自愈 (`Self-Healing ip rule`)
-- **原版痛点**：MikroTik RouterOS 从 v7.22 版本开始，在容器命名空间内默认强行下发优先级最高的系统策略路由规则（`1: local`, `2: main`, `3: default`）。这会导致 Sing-Box TUN 模式自动下发的策略路由被彻底阻断，出现“内核显示正常运行，但局域网设备无论如何无法走代理”的严重系统缺陷。
-- **ROS-Box 突破**：
-  - 内置专为 RouterOS 研发的**规则动态重排与自愈引擎**（`openbox-ctl` & `entrypoint.sh`）；
-  - 容器启动与运行期间自动抹除 RouterOS 的 1/2/3 号冲突规则，并平滑下移至标准优先级，实现 **0 脚本维护、开机即用、100% 顺畅接管流量**。
+- **原版痛点**：RouterOS v7.22+ 在容器内默认强行下发高优系统规则（`1: local`, `2: main`, `3: default`），导致 Sing-Box TUN 策略路由被阻断，局域网设备无法走代理。
+- **ROS-Box 突破**：内置规则动态重排与自愈引擎（`openbox-ctl` & `entrypoint.sh`），启动与运行期自动消解 1/2/3 号冲突规则，实现 **0 脚本维护、开机即用、100% 顺畅接管流量**。
 
-### 3. 🚀 Smart DNS 零泄露并发竞速 (Smart DNS 0ms Multi-Upstream Racing)
-- **原版痛点**：原版严重依赖 OpenWrt 宿主机的 `dnsmasq` 配置文件注入和服务重启，在纯容器或精简 Linux 物理机环境中由于缺少 `uci` 与 `dnsmasq`，极易导致 DNS 模块报错崩溃、发生 DNS 污染或境外 DNS 解析泄露。
-- **ROS-Box 突破**：
-  - 内嵌 7853 独立 Smart DNS 防劫持引擎，彻底脱离宿主 `dnsmasq`；
-  - **国内 DNS 三路并发竞速**：AliDNS + DNSPod + 运营商本地 DNS 三路并行竞速，取最快返回结果（降至极限 1~3ms）；
-  - **海外流量 0 泄露机制**：国外域名强制通过已加密的出站代理隧道进行远程解析（Split-DNS 隔离），杜绝任何 DNS 污染与隐私泄露。
+### 3. 🚀 Smart DNS 零泄露并发竞速 (0ms Multi-Upstream Racing)
+- **原版痛点**：强依赖宿主 `uci` 与 `dnsmasq`，在纯容器或精简 Linux 物理机中易报错、受污染或发生 DNS 泄露。
+- **ROS-Box 突破**：内嵌 7853 独立 Smart DNS 引擎；**国内 DNS 三路并发竞速**（AliDNS + DNSPod + 本地 DNS 取最快结果，1~3ms）；**海外流量 0 泄露**（国外域名强制经加密隧道远程解析，Split-DNS 隔离）。
 
 ### 4. 🌐 TCP Fast Open (TFO) 与千兆高吞吐调优
-- **原版痛点**：原版未对高并发 socket 限制与 TCP 拥塞控制做特化调优。
-- **ROS-Box 突破**：
-  - 启动阶段全局激活 `TCP Fast Open (TFO)`，三次握手首包直接携带应用层请求数据，大幅压缩网页首次加载的 RTT 延迟；
-  - 调高 socket 缓冲区与内核参数（`ulimit -n 65535`、`tcp_window_scaling=1`、BBR 拥塞控制适配）；
-  - 内置日志滚动防爆盘机制（>5MB 自动裁切），保护设备闪存寿命。
+- **ROS-Box 突破**：全局激活 `TCP Fast Open (TFO)` 压缩首包握手延迟；调优高并发参数（`ulimit -n 65535`、`tcp_window_scaling=1`、BBR 适配）；内置日志防爆盘裁切（>5MB 自动轮转），保护设备闪存寿命。
 
 ---
 
