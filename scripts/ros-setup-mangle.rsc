@@ -11,7 +11,7 @@
 :local containerIp "172.16.1.2/24"
 :local rosGateway "172.16.1.1"
 :local lanSubnet "192.168.88.0/24"
-:local imageName "your-docker-registry/ros-box:latest"
+:local imageName "fyasshole/ros-box:latest"
 
 # 1. 创建独立容器网桥与 IP
 /interface/bridge
@@ -33,8 +33,8 @@ add chain=srcnat action=masquerade src-address=172.16.1.0/24 comment="NAT for Co
 
 # 4. 创建持久化存储挂载目录
 /container/mounts
-add name=rosbox-data src="$diskName/rosbox/data" dst="/opt/open-box/data"
-add name=rosbox-etc src="$diskName/rosbox/etc" dst="/opt/open-box/etc"
+add name=rosbox-data src="$diskName/rosbox/data" dst="/opt/ROS-Box/data"
+add name=rosbox-etc src="$diskName/rosbox/etc" dst="/opt/ROS-Box/etc"
 
 # 5. 配置容器环境
 /container/config

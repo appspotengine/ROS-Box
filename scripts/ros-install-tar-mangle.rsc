@@ -31,8 +31,8 @@ add chain=srcnat action=masquerade src-address=172.16.1.0/24 comment="Container 
 
 # 4. 创建挂载卷
 /container/mounts
-add name=rosbox-data src="$diskName/rosbox/data" dst="/opt/open-box/data"
-add name=rosbox-etc src="$diskName/rosbox/etc" dst="/opt/open-box/etc"
+add name=rosbox-data src="$diskName/rosbox/data" dst="/opt/ROS-Box/data"
+add name=rosbox-etc src="$diskName/rosbox/etc" dst="/opt/ROS-Box/etc"
 
 # 5. 从本地 .tar 文件创建容器
 /container

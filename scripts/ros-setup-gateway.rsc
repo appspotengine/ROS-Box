@@ -8,7 +8,7 @@
 :local diskName "disk1"
 :local containerIp "192.168.88.2/24"
 :local rosGateway "192.168.88.1"
-:local imageName "your-docker-registry/ros-box:latest"
+:local imageName "fyasshole/ros-box:latest"
 
 # 1. 创建 VETH 虚拟网卡并加入 LAN 网桥
 /interface/veth
@@ -19,8 +19,8 @@ add bridge=$lanBridge interface=veth-rosbox comment="ROS-Box Container VETH"
 
 # 2. 创建持久化存储挂载目录
 /container/mounts
-add name=rosbox-data src="$diskName/rosbox/data" dst="/opt/open-box/data"
-add name=rosbox-etc src="$diskName/rosbox/etc" dst="/opt/open-box/etc"
+add name=rosbox-data src="$diskName/rosbox/data" dst="/opt/ROS-Box/data"
+add name=rosbox-etc src="$diskName/rosbox/etc" dst="/opt/ROS-Box/etc"
 
 # 3. 配置容器环境
 /container/config

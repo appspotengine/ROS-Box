@@ -92,113 +92,99 @@ ROS-Box 在保留上游优秀路由规则体系的同时，彻底剥离了对 Op
 
 ## 🚀 部署指南
 
-### 一、RouterOS 7.x 部署（推荐）
+> ⚠️ **部署前通用说明（必看）**：
+> 文档中出现的局域网网段示例均为 `192.168.88.x`（假设主路由网关是 `192.168.88.1`，分配给 ROS-Box 旁路由的空闲 IP 是 `192.168.88.2`）。**实际操作时，请务必将其替换为您自己局域网的真实网段与空闲 IP！**（例如您的主路由是 `10.0.0.1`，则将容器 IP 设为 `10.0.0.11/24`，网关设为 `10.0.0.1`）。
 
-#### 准备工作：开启容器功能、存储目录与虚拟网卡配置
+---
 
-1. **开启容器功能**：
-   在 WinBox 打开 **Terminal**，执行：
+### 一、MikroTik RouterOS 7.x 部署（原生容器推荐）
+
+#### 第一阶段：开启容器功能与基础网络准备（仅首次需执行）
+
+1. **开启 RouterOS 容器功能**：
+   在 WinBox 打开 **Terminal**，粘贴执行：
    ```routeros
    /system/device-mode/update container=yes
    ```
-   按提示按下设备物理 Reset 键或在 3-5 分钟内执行 `/system/reboot`。
-2. **准备存储目录（`/disk1`）**：
-   - **大多数场景（x86 软路由 / PVE / ESXi / CHR / RB5009 等内置空间充足设备）**：**无需外接硬盘**，直接在 RouterOS 内置存储中创建或使用 `/disk1` 目录即可（执行下方挂载点命令时系统也会在根目录自动生成 `/disk1/rosbox/...`）。
-   - **小闪存硬件（可选，如 128MB 闪存的 hAP ax2/ax3）**：如内置空间不足，可插入外置 USB/SSD 并在 **System → Disks** 格式化为 **ext4**（默认挂载名同样为 `disk1`）。
-3. **创建虚拟网卡 (VETH) 并加入局域网网桥 (Bridge)**：
-   *这一步是容器与局域网设备互通的关键，请在 Terminal 中执行以下两行命令：*
+   执行后按终端提示：**拔插一次路由器电源（或按一下物理 Reset 键）**，或在虚拟机环境执行 `/system/reboot` 完成确认。
+
+2. **关于存储路径（`disk1`）的重要说明**：
+   - **大多数设备（x86 软路由 / PVE / ESXi / CHR / RB5009 / CCR 等内置空间充足设备）**：**无需外接 USB/硬盘**！下方命令会自动在内置存储根目录生成挂载点目录，离线 `.tar` 包直接存放在根目录即可，100% 避免路径不存在报错。
+   - **小闪存设备（如仅 128MB 闪存的 hAP ax2/ax3）**：如内置空间不足以解压容器（解压后约 223 MiB），请插入 USB/SSD 并在 **System → Disks** 格式化为 **ext4**（假设盘符为 `disk1`，将下方命令中的文件路径加上 `disk1/` 前缀即可）。
+
+3. **一键创建 VETH 虚拟网卡、网桥端口与持久化挂载卷**：
+   打开 WinBox **Terminal**，修改第一行的容器 IP（`192.168.88.2/24`）与主路由网关（`192.168.88.1`）后整段粘贴执行（内置容错保护，重复执行不会报错）：
    ```routeros
-   # 1. 创建 VETH 虚拟网卡 (指定容器 IP，例如 192.168.88.2，网关指向路由器 192.168.88.1)
-   /interface/veth add name=veth-rosbox address=192.168.88.2/24 gateway=192.168.88.1
+   # 1. 创建 VETH 虚拟网卡（请将 192.168.88.2/24 和 192.168.88.1 改为您的实际局域网空闲 IP 与主路由 IP）
+   :do { /interface/veth add name=veth-rosbox address=192.168.88.2/24 gateway=192.168.88.1 } on-error={}
 
-   # 2. 将虚拟网卡加入局域网 Bridge 网桥
-   /interface/bridge/port add bridge=bridge interface=veth-rosbox comment="ROS-Box Container VETH"
-   ```
-   *(亦可在 WinBox 中操作：**Interfaces → VETH** 点 `+` 新建；然后在 **Bridge → Ports** 点 `+` 将 `veth-rosbox` 加入 `bridge`)*
+   # 2. 将虚拟网卡加入局域网 Bridge 网桥（若您的主网桥名称不是 bridge，请修改 bridge= 参数）
+   :do { /interface/bridge/port add bridge=bridge interface=veth-rosbox comment="ROS-Box Container VETH" } on-error={}
 
----
-
-### 🇨🇳 针对国内无科学上网环境的三大极速部署方案 (100% 成功率)
-
-在初次配置旁路由时，RouterOS 本身往往无法直接访问 GitHub。为此我们深度适配了国内加速镜像与纯离线部署通道，无需任何科学上网环境即可秒级完成安装：
-
-#### 方案一：国内加速镜像直连（纯命令行一键部署，推荐 ⭐⭐⭐⭐⭐）
-直接复制命令粘贴进 WinBox **Terminal** 回车，RouterOS 将通过国内高速镜像节点（`ghproxy.net`）自动拉取镜像并部署：
-
-1. **自动拉取镜像包至路由器 `/disk1` 目录（按设备架构二选一）**：
-   - **x86 PC 软路由 / CHR 虚拟机 / 工控机 (`amd64`)**：
-     ```routeros
-     /tool fetch url="https://ghproxy.net/https://github.com/zyeyefyass/ROS-Box/releases/download/v0.1.317/ROS-Box-amd64.tar" dst-path="disk1/ROS-Box-amd64.tar" mode=https
-     ```
-   - **MikroTik RB5009 / CCR / ax2 / ax3 (`arm64`)**：
-     ```routeros
-     /tool fetch url="https://ghproxy.net/https://github.com/zyeyefyass/ROS-Box/releases/download/v0.1.317/ROS-Box-arm64.tar" dst-path="disk1/ROS-Box-arm64.tar" mode=https
-     ```
-
-2. **一键创建网卡、挂载点并导入容器**：
-   在 Terminal 中粘贴执行以下纯本地配置（以 x86 为例，ARM64 请将 `file=` 参数改为 `disk1/ROS-Box-arm64.tar`）：
-   ```routeros
-   # 1. 确保虚拟网卡与网桥就绪
-   /interface/veth add name=veth-rosbox address=192.168.88.2/24 gateway=192.168.88.1
-   /interface/bridge/port add bridge=bridge interface=veth-rosbox comment="ROS-Box Container VETH"
-
-    # 2. 建立持久化数据挂载卷
-   /container/mounts add name=rosbox-data src="disk1/rosbox/data" dst="/opt/ROS-Box/data"
-   /container/mounts add name=rosbox-etc src="disk1/rosbox/etc" dst="/opt/ROS-Box/etc"
-
-   # 3. 导入本地镜像创建容器
-   /container add file=disk1/ROS-Box-amd64.tar interface=veth-rosbox root-dir=disk1/rosbox/root mounts=rosbox-data,rosbox-etc logging=yes start-on-boot=yes comment="ROS-Box"
-   ```
-
-3. **启动容器**：
-   观察 WinBox Container 列表中状态从 `extracting...` 变为 `stopped` 后执行：
-   ```routeros
-   /container/start [find comment="ROS-Box"]
+   # 3. 创建持久化数据与配置挂载卷（系统会自动创建对应目录，升级容器配置不丢失）
+   :do { /container/mounts add name=rosbox-data src="disk1/rosbox/data" dst="/opt/ROS-Box/data" } on-error={}
+   :do { /container/mounts add name=rosbox-etc src="disk1/rosbox/etc" dst="/opt/ROS-Box/etc" } on-error={}
    ```
 
 ---
 
-#### 方案二：PC 电脑拖拽 WinBox Files + 纯离线命令（最稳固，零网络依赖）
-电脑端下载安装包通常比路由器更灵活：
+#### 第二阶段：导入镜像并启动容器（四种方式任选其一）
 
-1. **电脑直接下载离线镜像包（国内直连加速链接）**：
-   - 💻 [ROS-Box-amd64.tar 国内加速下载 (x86/CHR)](https://ghproxy.net/https://github.com/zyeyefyass/ROS-Box/releases/download/v0.1.317/ROS-Box-amd64.tar)
-   - 📱 [ROS-Box-arm64.tar 国内加速下载 (RB5009/CCR/ax等)](https://ghproxy.net/https://github.com/zyeyefyass/ROS-Box/releases/download/v0.1.317/ROS-Box-arm64.tar)
-2. **WinBox 极速拖拽**：
-   打开 WinBox 左侧菜单 **Files**，直接把下载好的 `.tar` 文件拖入 `disk1/` 目录（内网千兆仅需 5~10 秒）。
-3. **在 Terminal 执行方案一的第 2、3 步配置命令** 即可完成秒级导入！
+##### 🇨🇳 方式 A：国内加速镜像直连一键拉取（纯命令行，无需科学上网 ⭐⭐⭐⭐⭐）
+复制对应架构命令粘贴进 WinBox **Terminal** 回车，自动通过国内高速镜像下载最新离线包并创建容器：
 
----
+- **1. x86 软路由 / PVE / ESXi / CHR 虚拟机 / 工控机 (`amd64` 架构)**：
+  ```routeros
+  /tool fetch url="https://ghproxy.net/https://github.com/zyeyefyass/ROS-Box/releases/latest/download/ROS-Box-amd64.tar" dst-path="ROS-Box-amd64.tar" mode=https; /container add file=ROS-Box-amd64.tar interface=veth-rosbox root-dir=disk1/rosbox/root mounts=rosbox-data,rosbox-etc logging=yes start-on-boot=yes comment="ROS-Box"
+  ```
+- **2. MikroTik RB5009 / CCR2004 / hAP ax2 / ax3 (`arm64` 架构)**：
+  ```routeros
+  /tool fetch url="https://ghproxy.net/https://github.com/zyeyefyass/ROS-Box/releases/latest/download/ROS-Box-arm64.tar" dst-path="ROS-Box-arm64.tar" mode=https; /container add file=ROS-Box-arm64.tar interface=veth-rosbox root-dir=disk1/rosbox/root mounts=rosbox-data,rosbox-etc logging=yes start-on-boot=yes comment="ROS-Box"
+  ```
 
-#### 方案三：局域网内部飞速中转拉取（零公网流量，千兆内网直传）
-如果路由器当前无法连接外网，可利用同局域网的电脑快速分发：
-1. 在存放 `ROS-Box-amd64.tar` 的电脑文件夹中打开终端（PowerShell / CMD），启动临时微型 HTTP 服务：
-   ```powershell
-   python -m http.server 8000
-   ```
-2. 在 RouterOS Terminal 中直接向局域网电脑拉取（假设电脑 IP 为 `192.168.88.10`）：
+##### 💻 方式 B：电脑浏览器下载 + WinBox Files 拖拽导入（最稳妥，100% 零网络依赖）
+如果路由器未配置 DNS 或无法联网，用电脑下载后拖入 WinBox 最快：
+1. **在电脑浏览器点击下载离线包**：
+   - 📦 **x86_64 (`amd64`)**：[国内加速下载 ROS-Box-amd64.tar](https://ghproxy.net/https://github.com/zyeyefyass/ROS-Box/releases/latest/download/ROS-Box-amd64.tar) ｜ [GitHub 官方原链](https://github.com/zyeyefyass/ROS-Box/releases/latest/download/ROS-Box-amd64.tar)
+   - 📦 **ARM64 (`arm64`)**：[国内加速下载 ROS-Box-arm64.tar](https://ghproxy.net/https://github.com/zyeyefyass/ROS-Box/releases/latest/download/ROS-Box-arm64.tar) ｜ [GitHub 官方原链](https://github.com/zyeyefyass/ROS-Box/releases/latest/download/ROS-Box-arm64.tar)
+2. **拖拽上传**：打开 WinBox 左侧 **Files**，直接把下载好的 `ROS-Box-amd64.tar`（或 `ROS-Box-arm64.tar`）拖拽到 **Files 列表最顶层根目录**（若拖入了 `disk1` 文件夹内，请将下方 `file=` 改为 `disk1/ROS-Box-amd64.tar`）。
+3. **导入容器**：在 Terminal 粘贴执行（ARM64 设备请将文件名改为 `ROS-Box-arm64.tar`）：
    ```routeros
-   /tool fetch url="http://192.168.88.10:8000/ROS-Box-amd64.tar" dst-path="disk1/ROS-Box-amd64.tar"
+   /container add file=ROS-Box-amd64.tar interface=veth-rosbox root-dir=disk1/rosbox/root mounts=rosbox-data,rosbox-etc logging=yes start-on-boot=yes comment="ROS-Box"
    ```
-3. 拉取完成后，直接执行容器导入命令即可。
 
----
+##### ⚡ 方式 C：局域网电脑 HTTP 极速中转（千兆内网 3 秒拉取）
+1. 在电脑存放 `.tar` 包的文件夹打开 PowerShell / CMD 运行：`python -m http.server 8000`
+2. 在 RouterOS Terminal 执行（将 `192.168.88.10` 替换为您的电脑局域网 IP）：
+   ```routeros
+   /tool fetch url="http://192.168.88.10:8000/ROS-Box-amd64.tar" dst-path="ROS-Box-amd64.tar"; /container add file=ROS-Box-amd64.tar interface=veth-rosbox root-dir=disk1/rosbox/root mounts=rosbox-data,rosbox-etc logging=yes start-on-boot=yes comment="ROS-Box"
+   ```
 
-### 🌐 海外/已有代理环境一键直连命令
-
-如果您的路由器环境已具备国际互联网访问能力，可直接运行一键式远程脚本：
+##### 🌐 方式 D：Docker Hub 官方镜像在线拉取（适合海外或已有代理环境）
+如果您的 RouterOS 可正常连接 Docker Hub，无需下载 `.tar`，直接拉取官方多架构镜像 `fyasshole/ros-box:latest`：
 ```routeros
-/tool fetch url="https://raw.githubusercontent.com/zyeyefyass/ROS-Box/main/scripts/ros-install-tar-gateway.rsc" dst-path="disk1/ros-install.rsc"; /import file=disk1/ros-install.rsc
+/container/config set registry-url=https://registry-1.docker.io tmpdir="disk1/pull"
+/container add remote-image=fyasshole/ros-box:latest interface=veth-rosbox root-dir=disk1/rosbox/root mounts=rosbox-data,rosbox-etc logging=yes start-on-boot=yes comment="ROS-Box"
 ```
+
+#### 第三阶段：启动 RouterOS 容器
+执行导入命令后，打开 WinBox 左侧 **Container** 窗口，观察容器状态从 `extracting` 变为 **`stopped`**（约需 5~10 秒），然后在 Terminal 执行启动命令（或在界面直接点击 **Start**）：
+```routeros
+/container/start [find comment="ROS-Box"]
+```
+启动后状态变为 `running`，浏览器直接访问 **`http://192.168.88.2:2026`**（您设定的容器 IP）即可进入管理面板！
 
 ---
 
 ### 二、NAS Docker（飞牛 fnOS / 群晖 / Unraid / CasaOS / 1Panel）部署
 
-本项目已同步发布至 **Docker Hub ([`fyasshole/ros-box`](https://hub.docker.com/r/fyasshole/ros-box))** 与 **GitHub Container Registry (`ghcr.io/zyeyefyass/ros-box`)**，原生支持 `linux/amd64` 与 `linux/arm64` 双架构。
+本项目已发布至 **Docker Hub ([`fyasshole/ros-box`](https://hub.docker.com/r/fyasshole/ros-box))** 与 **GitHub Container Registry (`ghcr.io/zyeyefyass/ros-box`)**，原生支持 `linux/amd64` 与 `linux/arm64` 双架构。
 
-> 💡 **为什么 NAS 旁路由推荐使用独立 Macvlan 网络？**
-> 使用 **Macvlan** 可为 `ROS-Box` 容器分配一个**局域网内完全独立的 IP 与 MAC 地址**（例如飞牛 NAS 是 `192.168.88.10`，ROS-Box 独立 IP 是 `192.168.88.2`），不会占用飞牛宿主机的 53 (DNS) 端口，也不影响飞牛自身的网络与路由表，体验与独立硬件旁路由完全一致！
+> 💡 **NAS 部署网络模式选择指南（关键防坑）**：
+> 1. **Macvlan 独立 IP 模式（最推荐 ⭐⭐⭐⭐⭐）**：为容器分配局域网独立 IP（如飞牛 NAS 是 `192.168.88.10`，ROS-Box 是 `192.168.88.2`），彻底避免与 NAS 宿主机争抢 53 (DNS) 端口或污染宿主机路由表，体验等同于一台独立硬件旁路由。
+>    *(注：若您的飞牛 fnOS / 群晖安装在 **PVE 或 ESXi 虚拟机** 内，使用 Macvlan 需在 PVE/ESXi 虚拟网卡设置中开启 **混杂模式 Promiscuous Mode**；若不想开启混杂模式，请直接使用下方的 **Host 网络模式**)*。
+> 2. **Host 网络模式（最简单，适合虚拟机内安装的 NAS）**：容器直接共享 NAS 宿主机 IP（访问地址为 `http://<NAS_IP>:2026`，旁路由网关也指向 `<NAS_IP>`）。
+> 3. **Bridge 端口映射模式**：⚠️ **注意**：Bridge 模式由于经过 Docker NAT 隔离，**不能**将容器作为局域网透明旁路由网关（TUN），仅能通过 `http://<NAS_IP>:7890` 在客户端软件中手动填写 HTTP/SOCKS5 代理使用。做透明旁路由请务必选 **Macvlan** 或 **Host**！
 
 ---
 
@@ -209,26 +195,28 @@ ROS-Box 在保留上游优秀路由规则体系的同时，彻底剥离了对 Op
 2. 在顶部搜索框直接输入 **`ros-box`**（或 **`fyasshole/ros-box`**），点击下载官方镜像（标签选择 `latest`）。
 
 ##### 第二步：创建飞牛 Macvlan 独立局域网（仅首次需执行一次）
-通过 SSH 连接飞牛 fnOS，执行以下 3 条命令创建 Macvlan 网络（请将 `192.168.88.0/24` 和网关 `192.168.88.1` 替换为您实际的局域网网段）：
+通过 SSH 登录飞牛 fnOS，执行以下 3 条命令创建 Macvlan 网络（请将 `192.168.88.0/24`、网关 `192.168.88.1`、固定分配 IP `192.168.88.2/32` 替换为您实际的局域网参数）：
 ```bash
-# 1. 查看飞牛主网卡名称（例如 enp3s0、eth0；若开启了虚拟机网桥通常为 enp3s0-ovs）
+# 1. 查看飞牛主网卡名称（例如 enp3s0、eth0；若飞牛开启了虚拟机网桥通常为 enp3s0-ovs）
 ip route | grep default
 
-# 2. 开启物理网卡混杂模式（将 enp3s0 替换为上一步查到的实际网卡名）
+# 2. 开启物理网卡混杂模式（请将 enp3s0 替换为第 1 步查到的实际网卡名）
 sudo ip link set enp3s0 promisc on
 
-# 3. 创建名为 macvlan-net 的 Docker 独立网络
+# 3. 创建名为 macvlan-net 的独立网络（通过 --ip-range 锁定分配 192.168.88.2）
 sudo docker network create -d macvlan \
   --subnet=192.168.88.0/24 \
   --gateway=192.168.88.1 \
+  --ip-range=192.168.88.2/32 \
   -o parent=enp3s0 \
   macvlan-net
 ```
+*(注：由于上一步添加了 `--ip-range=192.168.88.2/32`，无论您下面用 Compose 还是纯图形界面创建容器，Docker 都会 100% 自动将该容器固定在 `192.168.88.2`！)*
 
-##### 第三步：启动容器并绑定固定旁路由 IP（提供 Compose 与纯图形界面两种选法）
+##### 第三步：启动容器（提供 Compose 与纯图形界面两种选法）
 
-- **选法 A：通过飞牛「Compose → 新增项目」固定独立 IP 启动（最推荐，重启 IP 永不变化）**
-  打开 **飞牛 Docker → Compose → 新增项目**，项目名称填 `ros-box`，选择存放路径后勾选 **「创建 docker-compose.yml」**，粘贴以下内容（将 `192.168.88.2` 改为您想分配给 ROS-Box 的空闲局域网 IP）：
+- **选法 A：通过飞牛「Compose → 新增项目」启动（最推荐，配置一目了然）**
+  打开 **飞牛 Docker → Compose → 新增项目**，项目名称填 `ros-box`，选择存放路径后勾选 **「创建 docker-compose.yml」**，粘贴以下内容（将 `192.168.88.2` 改为您分配给 ROS-Box 的独立 IP）：
   ```yaml
   services:
     ros-box:
@@ -259,41 +247,34 @@ sudo docker network create -d macvlan \
     macvlan-net:
       external: true
   ```
-  点击创建并启动后，直接在浏览器访问 **`http://192.168.88.2:2026`** 即可进入 ROS-Box 控制台！局域网需要科学上网的设备只需将 **网关** 和 **DNS** 指向 `192.168.88.2` 即可。
+  点击创建并启动后，直接在浏览器访问 **`http://192.168.88.2:2026`** 即可进入 ROS-Box 控制台！
 
 - **选法 B：通过飞牛「本地镜像 → 运行」纯图形化向导创建**
   1. 进入 **飞牛 Docker → 本地镜像**，找到下载好的 `fyasshole/ros-box:latest` 点击右侧 **「运行」**；
-  2. **基础设置**：勾选 **「开机自启」**；展开高级设置，勾选 **「使用最高权限执行容器 (Privileged)」**；
+  2. **基础设置**：勾选 **「开机自启」**；展开高级设置，**务必勾选「使用最高权限执行容器 (Privileged)」**；
   3. **存储位置（文件夹映射）**：
      - 点击「添加路径」：选择飞牛本地新建的 `data` 文件夹 → 装载路径填 **`/opt/ROS-Box/data`**（权限：读写）
      - 点击「添加路径」：选择飞牛本地新建的 `etc` 文件夹 → 装载路径填 **`/opt/ROS-Box/etc`**（权限：读写）
-  4. **网络**：下拉选择刚刚创建的 **`macvlan-net`**（若不想配 Macvlan，也可在此直接选 **`host`** 模式，此时访问地址为 `http://<飞牛IP>:2026`）；
+  4. **网络**：下拉选择刚刚创建的 **`macvlan-net`**（若不想用 Macvlan，也可在此直接选择 **`host`** 模式，此时访问地址与网关均为 `飞牛宿主机IP`）；
   5. 点击完成创建即可一键启动！
 
 ---
 
-#### 方式 2：标准 Docker Compose 部署（Bridge / Host 模式通用）
-如果您不需要 Macvlan 独立 IP，可直接使用标准端口映射模式新建 `docker-compose.yml`：
+#### 方式 2：通用 Docker Compose 部署（Host 旁路由模式）
+如果您在飞牛 fnOS / 群晖 / Unraid 上不想配置 Macvlan（或 NAS 运行在未开启混杂模式的虚拟机中），可直接使用 **Host 网络模式** 的 `docker-compose.yml`：
 ```yaml
 services:
   ros-box:
-    # Docker Hub 官方镜像（也可替换为 ghcr.io/zyeyefyass/ros-box:latest）
     image: fyasshole/ros-box:latest
     container_name: ros-box
-    restart: unless-stopped
+    restart: always
+    network_mode: host
     privileged: true
     cap_add:
       - NET_ADMIN
       - SYS_ADMIN
     devices:
       - /dev/net/tun:/dev/net/tun
-    ports:
-      - "2026:2026"
-      - "7853:7853/udp"
-      - "7853:7853/tcp"
-      - "7890:7890"
-    sysctls:
-      - net.ipv4.ip_forward=1
     volumes:
       - ./data:/opt/ROS-Box/data
       - ./etc:/opt/ROS-Box/etc
@@ -303,54 +284,18 @@ services:
       - OPENBOX_PLATFORM=container
 ```
 
-#### 方式 3：Docker CLI 一键命令部署（Macvlan 独立 IP 或端口映射）
-- **Macvlan 独立旁路由 IP 一键启动命令**：
-  ```bash
-  docker run -d \
-    --name ros-box \
-    --restart always \
-    --network macvlan-net \
-    --ip 192.168.88.2 \
-    --privileged \
-    --cap-add=NET_ADMIN \
-    --device /dev/net/tun:/dev/net/tun \
-    --dns 223.5.5.5 \
-    -v /opt/rosbox/data:/opt/ROS-Box/data \
-    -v /opt/rosbox/etc:/opt/ROS-Box/etc \
-    -e TZ=Asia/Shanghai \
-    fyasshole/ros-box:latest
-  ```
-- **标准端口映射一键启动命令**：
-  ```bash
-  docker run -d \
-    --name ros-box \
-    --restart unless-stopped \
-    --privileged \
-    --cap-add=NET_ADMIN \
-    --device /dev/net/tun:/dev/net/tun \
-    -p 2026:2026 \
-    -p 7853:7853/udp \
-    -p 7853:7853/tcp \
-    -p 7890:7890 \
-    --sysctl net.ipv4.ip_forward=1 \
-    -v /opt/rosbox/data:/opt/ROS-Box/data \
-    -v /opt/rosbox/etc:/opt/ROS-Box/etc \
-    -e TZ=Asia/Shanghai \
-    fyasshole/ros-box:latest
-  ```
-
 ---
 
 ### 三、Linux 物理机 / 虚拟机（Debian / Ubuntu / Armbian / PVE）旁路由部署
 
-如果您使用的是 **x86 小主机（N100 / J4125 等）**、**ARM 盒子（R2S / R4S / N1 等 Armbian 系统）** 或 **PVE / ESXi 独立 Linux 虚拟机**，直接将该机器本身作为局域网旁路由网关时，推荐使用 **Host 网络模式** 一键部署：
+如果您使用的是 **x86 软路由小主机（N100 / J4125 等）**、**ARM 旁路由盒子（R2S / R4S / N1 等 Armbian 系统）** 或 **PVE / ESXi 独立 Linux 虚拟机**，直接将该机器本身作为局域网透明旁路由网关时，执行以下命令即可一键完成部署：
 
 ```bash
-# 1. 开启宿主机 IPv4 流量转发
+# 1. 开启宿主机 IPv4 流量转发（作为旁路由网关必开）
 echo "net.ipv4.ip_forward=1" | sudo tee -a /etc/sysctl.conf && sudo sysctl -p
 
 # 2. 使用 Host 网络模式一键启动 ROS-Box（直接接管物理机网卡作为透明旁路由网关）
-docker run -d \
+sudo docker run -d \
   --name ros-box \
   --restart always \
   --network host \
@@ -364,16 +309,30 @@ docker run -d \
   -e PORT=2026 \
   fyasshole/ros-box:latest
 ```
-> 启动后直接访问 `http://<物理机IP>:2026`，并将局域网设备的网关指向该物理机 IP 即可享受满血千兆透明代理加速。
+> 启动后直接访问 **`http://<物理机IP>:2026`** 进入管理面板，局域网设备将 **网关** 与 **DNS** 指向该 `<物理机IP>` 即可享受满血千兆透明代理加速。
 
 ---
 
-## 💻 访问与使用
+## 💻 控制台初始化与局域网设备接入指南
 
-1. 打开浏览器访问：`http://<容器IP>:2026`（例如 `http://192.168.88.2:2026`）；
-2. 首次进入设置管理员登录密码；
-3. 进入 **订阅管理** 添加节点订阅链接；
-4. 进入 **设置中心** 选择分流策略，点击右上角 **部署 / 启动内核**。
+### 第一步：初始化 ROS-Box 控制台并启动内核
+1. 打开浏览器访问：**`http://<ROS-Box_IP>:2026`**（例如 `http://192.168.88.2:2026`）；
+2. **首次登录**：设置管理员密码并进入系统；
+3. **添加节点**：点击左侧 **「订阅管理」** → 添加您的机场订阅链接并点击更新（支持各类通用及 Sing-Box / Clash 订阅格式），或在 **「节点管理」** 手动导入单节点；
+4. **启动内核**：进入 **「概览」** 或 **「设置中心」**，点击启动 **Sing-Box 内核**，确认状态显示为 **运行中 (Running)**。
+
+### 第二步：让局域网设备走 ROS-Box 透明代理（二选一）
+- **选法 1：单台设备按需接入（最安全，不影响家里其他人上网）**
+  在需要科学上网的电脑或手机 Wi-Fi 设置中，将 IP 获取方式改为 **手动 (静态)**：
+  - **IP 地址**：填设备原本的局域网 IP（如 `192.168.88.50`）
+  - **子网掩码**：`255.255.255.0`（或前缀长度 `24`）
+  - **默认网关 (Gateway)**：填 **ROS-Box 的 IP**（如 `192.168.88.2`）
+  - **DNS 服务器**：填 **ROS-Box 的 IP**（如 `192.168.88.2`）或主路由 IP
+- **选法 2：全屋设备自动无感接入（主路由 DHCP 下发）**
+  打开主路由器的 **DHCP Server → Networks** 设置：
+  - 将 **Gateway（默认网关）** 修改为 **ROS-Box 的 IP**（如 `192.168.88.2`）；
+  - 将 **DNS Server** 修改为 **ROS-Box 的 IP**（如 `192.168.88.2`）；
+  - 局域网手机、电脑、Apple TV 断开重连一次 Wi-Fi 即可全自动走旁路由透明分流（国内直连 0 减速，海外走代理）。
 
 ---
 
